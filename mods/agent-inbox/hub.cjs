@@ -99,9 +99,11 @@ function createHub({ endpoint, app, act, ui = {}, onChange = () => {}, onRole = 
   }
 
   // A request from the other side: an action for this app (leader -> follower) or a UI call
-  // for the leader (follower -> leader).
-  function answer(sock, msg) {
+  // for the leader (follower -> leader). `allowed` is the one kind that side may send: actions
+  // come only from the leader, which runs them for the user's click in its own windows.
+  function answer(sock, msg, allowed) {
     const run = async () => {
+      if (msg.t !== allowed) throw new Error(`unsupported request ${msg.t} ${msg.method ?? ""}`.trim());
       if (msg.t === "act") return act(msg.action);
       if (msg.t === "ui" && typeof ui[msg.method] === "function") return ui[msg.method](...(msg.args ?? []));
       throw new Error(`unsupported request ${msg.t} ${msg.method ?? ""}`.trim());
@@ -153,7 +155,7 @@ function createHub({ endpoint, app, act, ui = {}, onChange = () => {}, onRole = 
       up = true;
       uplink = sock;
       role = "follower";
-      lines(sock, (msg) => (msg.t === "res" ? settle(msg) : answer(sock, msg)));
+      lines(sock, (msg) => (msg.t === "res" ? settle(msg) : answer(sock, msg, "act")));
       send(sock, { t: "hello", v: PROTOCOL, app });
       send(sock, { t: "model", model: latest });
       onRole(false);
@@ -193,7 +195,7 @@ function createHub({ endpoint, app, act, ui = {}, onChange = () => {}, onRole = 
         peer.model = msg.model ?? null;
         onChange();
       } else if (msg.t === "res") settle(msg);
-      else answer(sock, msg);
+      else answer(sock, msg, "ui");
     });
     sock.on("close", () => {
       dropPending(sock);

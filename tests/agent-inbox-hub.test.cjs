@@ -247,6 +247,47 @@ test("a garbled line or a model sent before hello does not hurt the leader", asy
   assert.deepEqual(ids(a.hub), ["b"]);
 });
 
+test("the leader refuses an action from a connected app, and a follower refuses a UI call from the leader", async (t) => {
+  const c = cluster(t);
+  const a = await c.add("a");
+  a.hub.setModel(modelWith("a1"));
+  const sock = net.connect(c.endpoint);
+  t.after(() => sock.destroy());
+  await new Promise((r) => sock.once("connect", r));
+  const replies = [];
+  let buf = "";
+  sock.on("data", (d) => {
+    buf += d;
+    for (let i = buf.indexOf("\n"); i >= 0; i = buf.indexOf("\n")) (replies.push(JSON.parse(buf.slice(0, i))), (buf = buf.slice(i + 1)));
+  });
+  sock.write(`${JSON.stringify({ t: "hello", v: 1, app: { id: "evil", name: null, home: "" } })}\n${JSON.stringify({ t: "act", id: 7, action: { type: "approve", ref: ref("a1"), requestId: "r", decision: "accept" } })}\n`);
+  const res = await waitFor(() => replies.find((m) => m.id === 7), "the answer to the act request");
+  assert.equal(res.ok, false);
+  assert.deepEqual(a.calls.act, []);
+
+  // The other way: a fake leader that sends a UI call to a follower.
+  const endpoint = tempEndpoint();
+  const srv = net.createServer();
+  t.after(() => srv.close());
+  await new Promise((r) => srv.listen(endpoint, r));
+  const opened = [];
+  const follower = createHub({ endpoint, app: { id: "f", name: null, home: "" }, act() {}, ui: { openList: () => opened.push(1) }, retryMs: [10, 50] });
+  t.after(() => follower.close());
+  const peer = new Promise((r) => srv.once("connection", r));
+  follower.start();
+  const s = await peer;
+  const got = [];
+  let b2 = "";
+  s.on("data", (d) => {
+    b2 += d;
+    for (let i = b2.indexOf("\n"); i >= 0; i = b2.indexOf("\n")) (got.push(JSON.parse(b2.slice(0, i))), (b2 = b2.slice(i + 1)));
+  });
+  s.write(`${JSON.stringify({ t: "ui", id: 3, method: "openList", args: [] })}\n`);
+  const r2 = await waitFor(() => got.find((m) => m.id === 3), "the answer to the ui request");
+  assert.equal(r2.ok, false);
+  assert.deepEqual(opened, []);
+});
+
 test("hub.close frees the endpoint so a later hub can lead", async () => {
   const endpoint = tempEndpoint();
   const roles = [];
