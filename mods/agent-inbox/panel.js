@@ -14,6 +14,7 @@ let lastRendered = null;
 let limits = null; // { id, maxHeight } from main; an older main sends none
 let lastFit = "";
 let quiet = false; // inside show(), which returns the size itself
+let cleared = false; // hidden by main: nothing renders until the next show()
 const dismissed = new Set(); // cards that left locally
 const states = new Map(); // card.key -> per-card UI state
 
@@ -68,6 +69,7 @@ function show(next, lim) {
   }
   view = next;
   help = false;
+  cleared = false;
   if (next.mode === "inbox" && next.cardKey) {
     wantKey = next.cardKey;
     syncCur();
@@ -108,7 +110,14 @@ function fit() {
   );
 })();
 
-window.inbox = { update, show };
+// Main hid the window: drop the card, so the next show does not flash the old one.
+function clear() {
+  cleared = true;
+  lastRendered = null;
+  root.replaceChildren();
+}
+
+window.inbox = { update, show, clear };
 
 /* ---------- sending ---------- */
 
@@ -500,7 +509,7 @@ function render() {
 
   document.body.dataset.mode = view.mode;
   root.replaceChildren();
-  if (!model) return;
+  if (!model || cleared) return;
   let next;
   if (view.mode === "peek") next = peekView();
   else if (view.mode === "list") next = listView();

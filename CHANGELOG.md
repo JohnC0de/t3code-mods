@@ -15,7 +15,8 @@
   - `agent-inbox` 0.2.1: the strip and the inbox follow the app's zoom, so they are no longer
     cut off at 110 % or more. Each window takes the size of its card. The peek shows the peek
     card (not the inbox card), its clicks go through to the window below, and it has no tooltip
-    over it. On Windows both windows stay above the taskbar and other topmost windows.
+    over it. On Windows both windows are raised above the taskbar and other topmost windows
+    each time they show.
   - New mod `app-badge`: a named app gets "T3 <name>" in its window title and, on Windows, a
     letter badge on its taskbar button.
   - `agent-instructions` 1.1.0: `instructions.<name>.md` adds notes for one app only.

@@ -162,7 +162,17 @@ module.exports = (ctx) => {
     panelFocus = !!focus;
     // A peek is a picture only: the pointer and clicks go through it.
     panel.setIgnoreMouseEvents(next.mode === "peek");
-    if (!panel.webContents.isLoading()) renderPanel(); // else did-finish-load renders it
+    if (panel.webContents.isLoading()) return; // did-finish-load renders it
+    if (panelFocus) {
+      // Take the keyboard now: Windows lets this app come to the front only right after the
+      // user's key or click. The page is empty while hidden, so the old card does not flash;
+      // the render below fills and sizes the window.
+      panelFocus = false;
+      if (!panel.isVisible()) placePanel();
+      panel.show(); // also for a shown peek: show() makes an inactive window active
+      panel.focus();
+    }
+    renderPanel();
   }
   async function renderPanel() {
     const seq = ++renderSeq;
@@ -184,7 +194,9 @@ module.exports = (ctx) => {
     panelTop = panelAnchor = null;
     panelFocus = false;
     renderSeq++;
-    if (alive(panel)) panel.hide();
+    if (!alive(panel)) return;
+    panel.hide();
+    push(panel, "window.inbox?.clear?.()");
   }
   const cardFor = (threadKey) => model?.cards.find((c) => c.threadKey === threadKey)?.key ?? null;
   function showInbox({ cardKey, threadKey } = {}) {

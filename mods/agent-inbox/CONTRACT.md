@@ -36,6 +36,9 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
 { mode: "peek", threadKey: string }         // not focused; small read-only card; clicks go through
 ```
 
+When main hides the panel it calls `window.inbox.clear()`: the page shows nothing until the next
+`show`, so a window that shows again does not flash the old card.
+
 `limits` is `{ id, maxHeight }`: the render id and the largest window height in CSS px. `show`
 renders the view and returns `{ id, width, height }`, the size the window needs; main sizes the
 window to it before it shows the window. A main older than 0.2.1 sends no `limits` and keeps a
