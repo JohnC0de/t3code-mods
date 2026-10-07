@@ -49,8 +49,8 @@ shortcut when the strip is off.
 - Needs the `core/threads` patch, which came with loader commit `23863dd`. With an older loader
   the Mods page says `requires core/threads: no such patch`. To get it, pull this repo, quit
   T3 Code and run `node loader/t3mods.mjs install` again.
-- Not on the registry yet. Install it from this repository: `t3mods pack mods/agent-inbox`,
-  then `t3mods add` the zip.
+- Not on the registry yet. Install it from this repository:
+  `node loader/t3mods.mjs pack mods/agent-inbox`, then `node loader/t3mods.mjs add` the zip.
 - `hub.cjs` connects the apps through a named pipe (a unix socket outside Windows) that only
   your user account and mods folder map to. It has no network access.
 - `main.cjs` runs in the Electron main process, so changes to it need a T3 Code restart. The

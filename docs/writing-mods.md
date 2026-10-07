@@ -4,7 +4,8 @@ A mod is a folder in `~/.t3/mods/<id>/`. The folder name is the mod id. For a mo
 runs on your machine every file is optional; each one runs at its own level (see the table in
 the README). To share a mod as a zip, it needs a `mod.json` with an `id`; to publish it, also a
 semver `version` ([Publish to the registry](#publish-to-the-registry)).
-`node loader/t3mods.mjs new <id>` creates one from a template, with editor types.
+`node loader/t3mods.mjs new <id>` creates one from a template, with editor types. Below,
+`t3mods` means `node loader/t3mods.mjs` (run from this repo) or `node ~/.t3/t3mods/t3mods.mjs`.
 
 ```
 my-mod/
