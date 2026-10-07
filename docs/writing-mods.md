@@ -2,8 +2,8 @@
 
 A mod is a folder in `~/.t3/mods/<id>/`. The folder name is the mod id. For a mod that only
 runs on your machine every file is optional; each one runs at its own level (see the table in
-the README). To pack, share or publish a mod, it needs a `mod.json` with an `id` and a semver
-`version` ([Publish to the registry](#publish-to-the-registry)).
+the README). To share a mod as a zip, it needs a `mod.json` with an `id`; to publish it, also a
+semver `version` ([Publish to the registry](#publish-to-the-registry)).
 `node loader/t3mods.mjs new <id>` creates one from a template, with editor types.
 
 ```
@@ -113,8 +113,9 @@ Export a function. Return a cleanup function, or an object of methods. The rende
 the methods through `api.server()` or `api.main()`; an optional `dispose` method is the
 cleanup.
 
-The two files differ in when the cleanup runs. `server.cjs` hot-reloads: when you save it or
-turn the mod off, the loader runs the cleanup, then requires the new file. `main.cjs` loads
+The two files differ in when the cleanup runs. `server.cjs` hot-reloads: when you save it, the
+loader runs the cleanup, then requires the new file. When you turn the mod off, the loader runs
+the cleanup and does not load the file again. `main.cjs` loads
 once at app start and stops with the app: the loader never calls its cleanup, and a change
 needs a restart.
 
@@ -204,7 +205,8 @@ update; without the loader, run `server-patch` again after each update.
 
 ## Share a mod
 
-`pack` needs a `mod.json` with an `id` and a semver `version`.
+`pack` zips any folder that has a `mod.json`. `add` installs the zip only if that `mod.json`
+has a valid `id`. The zip name gets the `version` when the manifest has one.
 
 ```sh
 node loader/t3mods.mjs pack ~/.t3/mods/my-mod      # my-mod-1.0.0.zip

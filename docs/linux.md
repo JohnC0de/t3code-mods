@@ -46,8 +46,11 @@ runs as you, inside the app.
 ## Uninstall
 
 ```sh
-node loader/t3mods.mjs uninstall        # or: ELECTRON_RUN_AS_NODE=1 <app>/t3code loader/t3mods.mjs uninstall
+node loader/t3mods.mjs uninstall        # or: ELECTRON_RUN_AS_NODE=1 "/opt/T3 Code (Nightly)/t3code" loader/t3mods.mjs uninstall
 ```
+
+Without Node, replace `/opt/T3 Code (Nightly)` with your app folder (for example `/opt/t3code-bin`).
+Keep the quotes: some folder names have spaces.
 
 - AppImage: removes the launcher, the menu entry and the extracted copies. Your AppImage stays.
 - .deb: removes the diversion; `dpkg --verify` then passes.

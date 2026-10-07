@@ -34,8 +34,9 @@ shortcut when the strip is off.
 
 ## Notes
 
-- Needs the `core/threads` patch. The 0.3.0 loader does not have it; it came with commit
-  `23863dd`. With an older loader the Mods page says `requires core/threads: no such patch`.
+- Needs the `core/threads` patch, which came with loader commit `23863dd`. With an older loader
+  the Mods page says `requires core/threads: no such patch`. To get it, pull this repo and run
+  `node loader/t3mods.mjs install` again.
   To update, pull the repository and run the install again.
 - Not on the registry yet. Install it from this repository: `t3mods pack mods/agent-inbox`,
   then `t3mods add` the zip.
