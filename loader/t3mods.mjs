@@ -703,9 +703,20 @@ async function readToken(arg) {
   }
   if (process.env.T3MODS_TOKEN) return process.env.T3MODS_TOKEN.trim();
   if (!process.stdin.isTTY) {
-    const chunks = [];
-    for await (const c of process.stdin) chunks.push(c);
-    return Buffer.concat(chunks).toString("utf8").trim();
+    // Agents often run commands with stdin open and no TTY, which never ends: read one line,
+    // and give up when nothing arrives within 3 s instead of waiting for EOF.
+    return new Promise((resolve) => {
+      let buf = "";
+      const done = () => {
+        clearTimeout(timer);
+        process.stdin.destroy();
+        resolve(buf.split("\n")[0].trim());
+      };
+      const timer = setTimeout(done, 3000);
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (c) => ((buf += c), buf.includes("\n") && done()));
+      process.stdin.on("end", done);
+    });
   }
   const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stdout, terminal: true });
   rl._writeToOutput = (text) => rl.output.write(text.includes("Token") ? text : "");
