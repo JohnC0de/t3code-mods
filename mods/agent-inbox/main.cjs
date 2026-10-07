@@ -243,6 +243,8 @@ module.exports = (ctx) => {
       if (alive(strip)) strip.emit("moved");
       return true;
     },
+    // The loader does not call dispose on main mods yet (they stop with the app); kept so a
+    // future main reload has a clean exit.
     dispose() {
       watcher.close();
       globalShortcut.unregister(SHORTCUT);
