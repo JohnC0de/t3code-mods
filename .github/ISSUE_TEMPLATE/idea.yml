@@ -1,0 +1,22 @@
+name: Mod idea or API request
+description: A mod you want, or an app surface that mods cannot reach yet.
+labels: [idea]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should be possible
+      description: The user-visible result. Screenshots or mockups help.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How a mod could do it
+      description: Optional. The API, slot or patch it needs, if you know.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Help
+      options:
+        - label: I can help build or test this.

@@ -1,0 +1,5 @@
+{
+  "id": "welcome-text",
+  "name": "Welcome text",
+  "description": "Example: a text patch on the welcome screen, plus one that fails on purpose."
+}

@@ -1,0 +1,45 @@
+name: Bug
+description: The loader, the CLI or a mod in this repo does not work.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: T3 Code version
+      description: Settings > About, or the installer file name.
+      placeholder: 0.0.46-nightly.20261005.2702
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS and install type
+      options:
+        - Windows (installer)
+        - Linux AppImage
+        - Linux .deb
+        - Linux AUR (t3code-bin / t3code-nightly-bin)
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `t3mods status` and `t3mods doctor`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Lines that start with `[t3mods]` from the app's console (View > Toggle Developer Tools) or terminal. On Windows after an update, also `~/.t3/t3mods/post-update.log`.
+      render: text

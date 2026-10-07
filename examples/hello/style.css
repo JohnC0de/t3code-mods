@@ -1,0 +1,5 @@
+/* A CSS-only mod: save this file and the app swaps the stylesheet in place. */
+body {
+  outline: 3px solid rgb(34 197 94);
+  outline-offset: -3px;
+}

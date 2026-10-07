@@ -1,0 +1,12 @@
+{
+  "id": "agent-instructions",
+  "name": "Agent instructions",
+  "version": "1.0.0",
+  "description": "Adds your own text to the T3 Code instructions that every agent with the T3 tools gets (Claude, Codex, OpenCode, Pi, Cursor, ACP agents). Edit instructions.md; restart the app to apply.",
+  "tags": [
+    "agents",
+    "instructions"
+  ],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

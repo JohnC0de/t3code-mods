@@ -1,0 +1,7 @@
+{
+  "id": "hello-api",
+  "name": "Hello API",
+  "version": "1.0.0",
+  "description": "Example: a saved setting, a palette command and a call into the backend.",
+  "requires": ["core/palette"]
+}

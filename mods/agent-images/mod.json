@@ -1,0 +1,15 @@
+{
+  "id": "agent-images",
+  "name": "Agent images",
+  "version": "1.1.0",
+  "description": "Shows the images that the agent viewed, also when their tool group or turn is collapsed.",
+  "requires": [
+    "core/timeline-row"
+  ],
+  "tags": [
+    "timeline",
+    "images"
+  ],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

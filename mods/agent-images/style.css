@@ -1,0 +1,18 @@
+/* Gallery under a timeline row, aligned with the row's label (past its 1.75rem icon column). */
+.t3mod-agent-images {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.25rem 1.75rem;
+  padding-bottom: 0.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.t3mod-agent-images__item {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+/* Several images: keep them a row of thumbnails instead of one wide stack. */
+.t3mod-agent-images[data-count]:not([data-count="1"]) .t3mod-agent-images__item {
+  max-width: min(22rem, 70%);
+}

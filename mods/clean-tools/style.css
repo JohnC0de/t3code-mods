@@ -1,0 +1,95 @@
+/* Clean tool rows: a quieter work log. Commands read as code, thinking steps back, icons and
+   chevrons fade until hover. Only color, font and horizontal space change: the tool list is
+   virtualized at fixed row offsets, so row heights must stay as the app sets them.
+   Anchors: data-timeline-row-kind, data-v2-item-type, aria-label (stable across builds). */
+
+:root {
+  --t3mod-ct-dim: color-mix(in srgb, var(--secondary-label) 70%, transparent);
+  --t3mod-ct-hover: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+/* Every tool row: icons and chevrons fade, rows get a soft hover. */
+[data-v2-item-type][role="button"] .text-icon-muted,
+[data-timeline-row-kind="work-toggle"] button > div > span:first-child,
+[data-timeline-row-kind="work-live"] .text-icon-muted {
+  opacity: 0.45;
+  transition: opacity 120ms;
+}
+[data-v2-item-type][role="button"] svg,
+[data-timeline-row-kind="work-toggle"] svg,
+[data-timeline-row-kind="work-live"] svg {
+  scale: 0.85;
+}
+[data-v2-item-type][role="button"] > div > span[aria-hidden="true"]:last-child {
+  opacity: 0;
+  transition: opacity 120ms;
+}
+[data-v2-item-type][role="button"]:is(:hover, :focus-visible, [aria-expanded="true"]) > div > span[aria-hidden="true"]:last-child,
+[data-v2-item-type][role="button"]:is(:hover, :focus-visible) .text-icon-muted,
+[data-timeline-row-kind="work-toggle"] button:is(:hover, :focus-visible) > div > span:first-child {
+  opacity: 1;
+}
+[data-v2-item-type][role="button"]:hover,
+[data-timeline-row-kind="work-toggle"] button:hover {
+  background: var(--t3mod-ct-hover);
+}
+
+/* Group summary ("Ran 3 commands, ..."): a small caption above its list. */
+[data-timeline-row-kind="work-toggle"] button span.truncate {
+  color: var(--t3mod-ct-dim);
+  font-size: 0.8125rem;
+}
+
+/* Expanded group: a thin rule under the header icon instead of a column of icons. */
+[data-tool-group-scroll="true"] {
+  margin-left: 0.6875rem;
+  padding-left: 0.375rem;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+
+/* Commands read as code. */
+[data-v2-item-type="command_execution"][role="button"] p > span.truncate {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+}
+
+/* Other tools keep the app font at full label contrast. */
+[data-v2-item-type][role="button"]:not([data-v2-item-type="command_execution"], [data-v2-item-type="reasoning"]) p > span.truncate {
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+/* Thinking steps back. */
+[data-v2-item-type="reasoning"][role="button"] p > span.truncate {
+  font-style: italic;
+  color: var(--t3mod-ct-dim);
+}
+
+/* Failed calls: the label turns red, so the failure shows without reading the icon. */
+[data-v2-item-type][role="button"][aria-label$=", tool call failed"] p > span.truncate {
+  color: var(--error-foreground);
+}
+[data-v2-item-type][aria-label$=", tool call failed"] .text-tool-error-icon\/40 {
+  opacity: 0.8;
+}
+
+/* Option: hide thinking. Standalone rows go away; inside a tool list the row keeps its fixed
+   slot (virtualized), so it only fades further. */
+html[data-t3mod-ct-hide-thinking] [data-timeline-row-kind="work"]:not(:has([data-tool-group-scroll])):has([data-v2-item-type="reasoning"]) {
+  display: none;
+}
+html[data-t3mod-ct-hide-thinking] [data-tool-group-scroll] [data-v2-item-type="reasoning"] {
+  opacity: 0.4;
+}
+
+/* Option: no icons; labels move left into the icon column. */
+html[data-t3mod-ct-no-icons] [data-v2-item-type][role="button"] > div > span:first-child,
+html[data-t3mod-ct-no-icons] [data-timeline-row-kind="work-toggle"] button > div > span:first-child {
+  width: 0.25rem;
+  visibility: hidden;
+}
+html[data-t3mod-ct-no-icons] [data-tool-group-scroll="true"] {
+  margin-left: 0.125rem;
+}

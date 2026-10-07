@@ -1,0 +1,5 @@
+{
+  "id": "badge",
+  "name": "Badge",
+  "description": "Example: a plain DOM element that the mod removes on unload."
+}

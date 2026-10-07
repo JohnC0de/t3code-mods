@@ -1,0 +1,5 @@
+{
+  "id": "server-hello",
+  "name": "Server hello",
+  "description": "Example: code in the backend process that adds an HTTP header."
+}

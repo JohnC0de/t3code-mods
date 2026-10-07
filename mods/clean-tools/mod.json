@@ -1,0 +1,12 @@
+{
+  "id": "clean-tools",
+  "name": "Clean tool rows",
+  "version": "1.0.0",
+  "description": "Quieter, easier to scan tool, command and thinking rows in the chat timeline.",
+  "tags": [
+    "timeline",
+    "ui"
+  ],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

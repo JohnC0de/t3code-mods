@@ -1,0 +1,27 @@
+name: Broken after a T3 Code update
+description: A patch shows `match-missing`, `find-missing` or `find-ambiguous`, or a mod stopped working after an update.
+labels: [broken-patch]
+body:
+  - type: input
+    id: app
+    attributes:
+      label: New T3 Code version
+      placeholder: 0.0.47-nightly.20261010.2800
+    validations:
+      required: true
+  - type: input
+    id: last-good
+    attributes:
+      label: Last version that worked (if you know it)
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `t3mods doctor`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: What no longer works in the app. A fix is very welcome; see CONTRIBUTING.md, "When a T3 Code update breaks a patch".

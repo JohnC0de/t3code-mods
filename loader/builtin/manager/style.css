@@ -1,0 +1,136 @@
+/* Mods manager. Uses the app's theme variables, so it follows light, dark and custom themes. */
+.t3m-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+.t3m-page h1 { font-size: 1.25rem; font-weight: 600; }
+.t3m-page h2 { font-size: 0.95rem; font-weight: 600; }
+.t3m-page h3 { font-size: 0.9rem; font-weight: 600; }
+.t3m-page-head { display: flex; flex-direction: column; gap: 0.5rem; }
+.t3m-muted { color: var(--muted-foreground); }
+.t3m-error { color: var(--destructive); }
+.t3m-ok { color: var(--foreground); }
+.t3m-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+.t3m-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 0.6rem);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+.t3m-mod[data-status="disabled"] > :not(header) { opacity: 0.7; }
+.t3m-mod-head { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.t3m-mod-title { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.t3m-result-card { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+.t3m-badge[data-danger] { color: var(--destructive); border-color: color-mix(in srgb, var(--destructive) 50%, transparent); }
+.t3m-meta { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.8rem; }
+
+.t3m-badge {
+  padding: 0 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1.3rem;
+  color: var(--muted-foreground);
+}
+.t3m-badge[data-status="ok"] { color: var(--foreground); }
+.t3m-badge[data-status="degraded"],
+.t3m-badge[data-status="find-missing"],
+.t3m-badge[data-status="find-ambiguous"],
+.t3m-badge[data-status="match-missing"],
+.t3m-badge[data-status="partial"],
+.t3m-badge[data-status="error"] { color: var(--destructive); border-color: color-mix(in srgb, var(--destructive) 50%, transparent); }
+
+.t3m-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 50%, transparent);
+  border-radius: var(--radius-lg, 0.6rem);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 10%, transparent);
+}
+
+.t3m-drop {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md, 0.45rem);
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.t3m-drop[data-over] { border-color: var(--foreground); color: var(--foreground); }
+.t3m-link { text-decoration: underline; cursor: pointer; color: var(--foreground); }
+.t3m-row .t3m-input { flex: 1; min-width: 12rem; }
+.t3m-input {
+  box-sizing: border-box;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--input, var(--border));
+  border-radius: var(--control-radius, 0.45rem);
+  background: transparent;
+  color: inherit;
+}
+.t3m-mono, .t3m-page code, .t3m-diff { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.78rem; }
+
+.t3m-setting {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.t3m-section { flex-direction: column; align-items: stretch; }
+
+.t3m-details > summary { cursor: pointer; color: var(--muted-foreground); font-size: 0.8rem; }
+.t3m-details > summary h2 { display: inline; color: var(--foreground); font-size: 0.95rem; }
+.t3m-patches { margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; }
+
+.t3m-helper { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: end; }
+.t3m-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--muted-foreground); }
+.t3m-check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.8rem; }
+.t3m-result { display: flex; flex-direction: column; gap: 0.3rem; }
+.t3m-diff {
+  overflow-x: auto;
+  max-height: 16rem;
+  padding: 0.6rem;
+  border-radius: var(--radius-md, 0.45rem);
+  background: var(--code-background, var(--muted));
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.t3m-diff del { color: var(--destructive); text-decoration: none; }
+.t3m-diff ins { color: var(--diff-addition-foreground, #16a34a); text-decoration: none; }
+
+.t3m-btn { padding: 0.25rem 0.7rem; border: 1px solid var(--border); border-radius: var(--control-radius, 0.45rem); }
+
+/* Sidebar indicator: the app's icon button with a status dot. */
+.t3m-icon { position: relative; display: inline-flex; }
+.t3m-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--sidebar, var(--background));
+}
+.t3m-icon[data-tone="ok"] .t3m-dot { background: var(--diff-addition-foreground, #16a34a); }
+.t3m-icon[data-tone="warn"] .t3m-dot { background: var(--color-warning, #d97706); }
+.t3m-icon[data-tone="bad"] .t3m-dot { background: var(--destructive, #dc2626); }
+
+.t3m-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: rgb(0 0 0 / 0.4); }
+.t3m-overlay-panel { position: relative; width: min(56rem, 94vw); max-height: 90vh; overflow: auto; border-radius: 0.75rem; background: var(--background); }
+.t3m-overlay-panel .t3m-close { position: absolute; top: 1rem; right: 1rem; }

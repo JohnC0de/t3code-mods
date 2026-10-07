@@ -1,0 +1,6 @@
+{
+  "id": "palette-demo",
+  "name": "Palette demo",
+  "description": "Example: a command in the command palette.",
+  "requires": ["core/palette"]
+}

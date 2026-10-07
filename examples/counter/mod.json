@@ -1,0 +1,6 @@
+{
+  "id": "counter",
+  "name": "Counter",
+  "description": "Example: a React component in the sidebar footer, with no build step.",
+  "requires": ["core/sidebar-footer"]
+}

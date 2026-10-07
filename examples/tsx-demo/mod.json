@@ -1,0 +1,6 @@
+{
+  "id": "tsx-demo",
+  "name": "TSX demo",
+  "description": "Example: TSX source built with bun. Run `bun run build:tsx-demo -- --watch` while you edit.",
+  "requires": ["core/sidebar-footer"]
+}

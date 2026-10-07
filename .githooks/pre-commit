@@ -1,0 +1,7 @@
+#!/bin/sh
+# Local quality gate (this repo has no CI): unit tests must pass before each commit.
+out=$(node --test tests/*.test.cjs 2>&1) || {
+  printf '%s\n' "$out" | tail -n 30
+  echo "pre-commit: unit tests failed"
+  exit 1
+}

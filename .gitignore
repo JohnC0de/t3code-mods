@@ -1,0 +1,33 @@
+# Local copies of T3 Code builds and research downloads (large, not ours to redistribute)
+/extracted*/
+/platforms/
+/notes/research/repos/
+/notes/theo-videos/
+/notes/postplan-research/video/
+/notes/postplan-research/shots/
+/notes/postplan-research/evidence/
+
+# Sandbox: app copy, its data and test output
+/sandbox/app/
+/sandbox/appdata/
+/sandbox/home/
+/sandbox/userdata/
+/sandbox/update-test/
+/sandbox/devprofile/
+/sandbox/kit-test/
+/sandbox/dev.err
+/sandbox/*.png
+/sandbox/*.log
+
+# Runtime output
+*.log
+*.heartbeat
+.status.json
+.t3mods/
+.probe.json
+/notes/tools/probe/out.txt
+node_modules/
+.scratch/
+
+# Private notes (own repo)
+/notes/

@@ -1,0 +1,27 @@
+{
+  "name": "t3code-mods",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Mod loader for T3 Code: CSS, React and backend mods with hot reload. Not affiliated with T3 Code.",
+  "license": "MIT",
+  "repository": "github:JohnC0de/t3code-mods",
+  "bin": {
+    "t3mods": "loader/t3mods.mjs"
+  },
+  "files": [
+    "loader",
+    "install.sh",
+    "docs",
+    "examples",
+    "mods"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "test:linux": "bash tools/linux-test.sh",
+    "dev": "node loader/t3mods.mjs dev --isolated --mods mods --cdp 9333",
+    "e2e": "node tools/e2e.mjs --mods mods",
+    "doctor": "node loader/t3mods.mjs doctor --mods mods",
+    "build:tsx-demo": "bun build examples/tsx-demo/src/index.tsx --outfile examples/tsx-demo/renderer.js --format esm --target browser --external react --external react/* --external react-dom --external react-dom/*",
+    "e2e:registry": "node tools/e2e-registry.mjs --mods mods"
+  }
+}

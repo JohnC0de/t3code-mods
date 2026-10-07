@@ -1,0 +1,24 @@
+# Test package with the same layout as the AUR's t3code-nightly-bin: the extracted AppImage
+# in a root-owned /opt folder. Built from a local AppImage by tools/linux/scenario.sh.
+pkgname=t3code-nightly-bin
+pkgver=0.0.1
+pkgrel=1
+pkgdesc='T3 Code Nightly (t3mods test package)'
+arch=('x86_64')
+license=('MIT')
+options=('!debug' '!strip')
+source=('t3code.AppImage')
+sha256sums=('SKIP')
+
+prepare() {
+  chmod +x "$srcdir/t3code.AppImage"
+  rm -rf "$srcdir/squashfs-root"
+  "$srcdir/t3code.AppImage" --appimage-extract >/dev/null
+}
+
+package() {
+  install -d "$pkgdir/opt/$pkgname"
+  cp -a --no-preserve=ownership "$srcdir/squashfs-root/." "$pkgdir/opt/$pkgname/"
+  chmod -R u=rwX,go=rX "$pkgdir/opt/$pkgname"
+  chmod 4755 "$pkgdir/opt/$pkgname/chrome-sandbox"
+}
