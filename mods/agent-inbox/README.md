@@ -10,6 +10,7 @@ that you snoozed.
   a dot to peek; click it to answer. Drag the grip to move the pill up or down.
 - **Inbox.** `Ctrl+Alt+Space` from any app, or a click on the strip. One card at a time:
   questions, approvals, finished work and failures, most urgent first.
+- **Zoom.** The strip and the inbox follow the app's zoom (`Ctrl +` / `Ctrl -`).
 
 ## Several apps
 

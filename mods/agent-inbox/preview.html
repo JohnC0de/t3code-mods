@@ -70,11 +70,18 @@ const push = () => {
   strip.contentWindow.inbox?.update(structuredClone(model));
   panel.contentWindow.inbox?.update(structuredClone(model));
 };
+// Like main.cjs, the frame takes the size of the card that the page measured.
+let renderId = 0;
+const fitFrame = (size) => {
+  if (!size?.width) return;
+  panel.style.width = size.width + "px";
+  panel.style.height = size.height + "px";
+};
 const showPanel = (view) => {
   panelHidden = false;
   panel.style.visibility = "visible";
   panel.classList.toggle("peek", view.mode === "peek");
-  panel.contentWindow.inbox?.show(view);
+  fitFrame(panel.contentWindow.inbox?.show(view, { id: ++renderId, maxHeight: view.mode === "peek" ? 220 : 600 }));
   if (view.mode !== "peek") panel.contentWindow.focus();
 };
 const hidePanel = () => { panelHidden = true; panel.style.visibility = "hidden"; };
@@ -119,6 +126,7 @@ window.__inboxRpc = async (method, args, who) => {
     case "unpeek": if (panel.classList.contains("peek")) hidePanel(); return;
     case "closePanel": hidePanel(); return;
     case "fit": strip.style.width = a.width + "px"; strip.style.height = a.height + "px"; return;
+    case "fitPanel": if (a.id === renderId) fitFrame(a); return;
     case "dragEnd": return;
     default: throw new Error(`unknown method ${method}`);
   }

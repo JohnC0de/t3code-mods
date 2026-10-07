@@ -9,7 +9,9 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
   `fetch("/__mods/rpc/main/agent-inbox/" + method, { method: "POST", body: JSON.stringify(args) })`.
   The reply is `{ ok: true, value }` or `{ ok: false, error }`.
 - Main pushes to a page by running `window.inbox.update(model)` and, in the panel,
-  `window.inbox.show(view)`. Each page defines `window.inbox` before it calls `rpc("state")`.
+  `window.inbox.show(view, limits)`. Each page defines `window.inbox` before it calls `rpc("state")`.
+- Sizes from a page are CSS px. The pages load from the app's origin, so they follow the app's
+  zoom (`Ctrl +`); main multiplies by the zoom factor to get the window size.
 
 ## Main methods a page may call
 
@@ -19,19 +21,25 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
 | `act(action)` | `Action` | Runs the action in the app that owns the thread; resolves when that app accepted it, rejects with the reason |
 | `openInbox(opts)` | `{ cardKey?, threadKey? }` | Shows and focuses the panel in inbox view at that card (or at the first card of that thread) |
 | `openList()` | | Shows and focuses the panel in list view |
-| `peek(opts)` | `{ threadKey, y }` | Shows the panel without focus in peek view, next to the strip, at screen-relative strip `y` |
+| `peek(opts)` | `{ threadKey, offset, y }` | Shows the panel without focus in peek view, next to the strip, centered on the dot. `offset`: the dot's center in the strip page; `y`: the same on the screen, for a main older than 0.2.1 |
 | `unpeek()` | | Hides a peek (not an inbox the user opened) |
 | `closePanel()` | | Hides the panel |
-| `fit(size)` | `{ width, height }` | Strip only: resizes its window to the pill (CSS px) |
+| `fit(size)` | `{ width, height }` | Strip only: resizes its window to the pill. The strip sends it again when the zoom changes |
+| `fitPanel(size)` | `{ id, width, height }` | Panel only: resizes its window to the card after a change in the page (another card, the list, the key help). `id` is the `limits.id` of the newest `show`; main ignores an older one |
 | `dragEnd()` | | Strip only: snaps the strip back to the screen edge after a drag |
 
-## Panel views (`window.inbox.show(view)`)
+## Panel views (`window.inbox.show(view, limits)`)
 
 ```js
 { mode: "inbox", cardKey: string | null }   // focused; keys work
 { mode: "list" }                            // focused; all agents grouped by project
-{ mode: "peek", threadKey: string }         // not focused; small read-only card
+{ mode: "peek", threadKey: string }         // not focused; small read-only card; clicks go through
 ```
+
+`limits` is `{ id, maxHeight }`: the render id and the largest window height in CSS px. `show`
+renders the view and returns `{ id, width, height }`, the size the window needs; main sizes the
+window to it before it shows the window. A main older than 0.2.1 sends no `limits` and keeps a
+fixed window size; the card then fits the window.
 
 ## Model
 

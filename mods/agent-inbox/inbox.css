@@ -111,7 +111,7 @@ kbd {
 .badge {
   position: absolute;
   top: -5px;
-  right: -5px;
+  right: -2px; /* inside the pill: the screen edge cuts anything further right */
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -152,11 +152,13 @@ kbd {
 .grip:hover i { background: var(--muted); }
 
 /* ---------- Panel ---------- */
-#app { position: fixed; inset: 0; padding: 14px; display: flex; align-items: flex-start; justify-content: center; }
+/* The window is sized to #app, so #app takes the card's size, not the window's. The right
+   margin is smaller: that side faces the strip. --win-max is the largest window main allows. */
+#app { position: absolute; top: 0; left: 0; padding: 14px 10px 14px 14px; }
 .card {
+  position: relative;
   width: 420px;
-  max-width: 100%;
-  max-height: 100%;
+  max-height: calc(var(--win-max, 100vh) - 28px);
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -166,6 +168,8 @@ kbd {
   overflow: hidden;
   transition: opacity 0.16s, transform 0.16s;
 }
+/* An older main.cjs keeps the window at a fixed size and does not size it to the card. */
+body:not(.sized) .card { max-width: calc(100vw - 24px); }
 .card.enter { animation: pop 0.14s ease-out; }
 .card.leaving { opacity: 0; transform: translateX(-18px) scale(0.98); }
 
@@ -174,8 +178,10 @@ kbd {
 .title { margin: 0; flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .close { border: 0; background: transparent; padding: 2px; border-radius: 6px; }
 .close:hover kbd { color: var(--text); }
-.meta { margin-top: 3px; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
-.meta .proj { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { margin-top: 3px; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.meta > * { flex: none; }
+/* Only the app and project name shrink; the status and the pager keep one line. */
+.meta > .proj { flex: 0 1 auto; min-width: 3ch; overflow: hidden; text-overflow: ellipsis; }
 .meta .sep { opacity: 0.5; }
 .meta .ago { opacity: 0.8; }
 .pager { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
@@ -276,15 +282,17 @@ kbd {
 .arow .unread { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
 
 /* peek */
-.peek { padding: 8px 12px 10px; max-height: 100%; user-select: none; pointer-events: none; }
+.card.peek { width: 320px; max-height: calc(var(--win-max, 100vh) - 23px); padding: 8px 12px 10px; user-select: none; pointer-events: none; }
 .peek .title { font-size: 13.5px; }
 .peek .meta { margin: 0; }
 .peek .pk { margin: 4px 0 0; color: #d6d6db; font-size: 12.5px; line-height: 1.4; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .peek .pq { margin: 2px 0 0; font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* help overlay */
-body[data-mode="peek"] #app { padding: 10px; }
-.help { position: absolute; inset: 14px; display: grid; place-items: center; background: rgba(8, 8, 9, 0.7); border-radius: 14px; backdrop-filter: blur(3px); }
+body[data-mode="peek"] #app { padding: 10px 10px 13px; }
+/* The keys overlay covers the card; the card grows to hold it. */
+.card.help-open { min-height: 270px; }
+.help { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: rgba(8, 8, 9, 0.7); border-radius: inherit; backdrop-filter: blur(3px); }
 .help > div { width: 280px; padding: 14px 16px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); }
 .help h2 { margin: 0 0 8px; font-size: 13px; }
 .help dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; align-items: center; font-size: 12px; }

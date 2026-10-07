@@ -42,8 +42,8 @@ function render(model) {
       {
         class: `dotbtn${d.unread ? " unread" : ""}`,
         type: "button",
+        // No title: the peek shows it, and a tooltip would cover the peek.
         "aria-label": `${d.title}, ${where(d)}`,
-        title: d.app ? where(d) : null,
         onclick: () => {
           clearTimeout(hoverTimer);
           call("openInbox", { threadKey: d.threadKey });
@@ -53,7 +53,8 @@ function render(model) {
           clearTimeout(hoverTimer);
           hoverTimer = setTimeout(() => {
             const r = btn.getBoundingClientRect();
-            call("peek", { threadKey: d.threadKey, y: window.screenY + r.top + r.height / 2 });
+            const offset = r.top + r.height / 2;
+            call("peek", { threadKey: d.threadKey, offset, y: window.screenY + offset });
           }, 250);
         },
         onpointerleave: () => clearTimeout(hoverTimer),
@@ -78,7 +79,12 @@ function render(model) {
   );
   wrap.replaceChildren(pill);
   wrap.hidden = false;
+  fit();
+}
 
+// The window is sized to the pill. Sizes are CSS px; main converts them with the zoom.
+function fit() {
+  if (wrap.hidden) return;
   const r = wrap.getBoundingClientRect();
   const size = { width: Math.ceil(r.width), height: Math.ceil(r.height) };
   const key = `${size.width}x${size.height}`;
@@ -87,6 +93,19 @@ function render(model) {
     call("fit", size);
   }
 }
+
+// The zoom of the app (and so of this page) changed: main converts the size again.
+(function watchZoom() {
+  matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener(
+    "change",
+    () => {
+      lastSize = "";
+      fit();
+      watchZoom();
+    },
+    { once: true },
+  );
+})();
 
 function endDrag() {
   if (!gripDown) return;

@@ -11,6 +11,9 @@ let wantKey = null; // card key requested by show() before it exists
 let listSel = 0;
 let help = false;
 let lastRendered = null;
+let limits = null; // { id, maxHeight } from main; an older main sends none
+let lastFit = "";
+let quiet = false; // inside show(), which returns the size itself
 const dismissed = new Set(); // cards that left locally
 const states = new Map(); // card.key -> per-card UI state
 
@@ -56,7 +59,13 @@ function update(next) {
   render();
 }
 
-function show(next) {
+// Main sizes the window to the card: show() returns the size, and fit() reports later changes.
+function show(next, lim) {
+  if (lim) {
+    limits = lim;
+    document.documentElement.style.setProperty("--win-max", `${lim.maxHeight}px`);
+    document.body.classList.add("sized");
+  }
   view = next;
   help = false;
   if (next.mode === "inbox" && next.cardKey) {
@@ -64,8 +73,40 @@ function show(next) {
     syncCur();
   }
   if (next.mode === "list") listSel = 0;
+  quiet = !!lim; // a call from main gets the size back; a key here (L, Esc) reports it
   render();
+  quiet = false;
+  const size = measure();
+  lastFit = JSON.stringify(size);
+  return size;
 }
+
+function measure() {
+  const r = root.getBoundingClientRect();
+  return { id: limits?.id ?? 0, width: Math.ceil(r.width), height: Math.ceil(r.height) };
+}
+
+function fit() {
+  if (!limits || quiet) return;
+  const size = measure();
+  const key = JSON.stringify(size);
+  if (key === lastFit) return;
+  lastFit = key;
+  rpc("fitPanel", size).catch(() => {});
+}
+
+// The zoom of the app (and so of this page) changed: main converts the size again.
+(function watchZoom() {
+  matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener(
+    "change",
+    () => {
+      lastFit = "";
+      fit();
+      watchZoom();
+    },
+    { once: true },
+  );
+})();
 
 window.inbox = { update, show };
 
@@ -314,7 +355,7 @@ function inboxView() {
 
   const el = h(
     "section",
-    { class: `card${sending ? " sending" : ""}${lastRendered === card.key ? "" : " enter"}`, "data-key": card.key },
+    { class: `card${sending ? " sending" : ""}${lastRendered === card.key ? "" : " enter"}${help ? " help-open" : ""}`, "data-key": card.key },
     h(
       "header",
       { class: "head" },
@@ -328,7 +369,7 @@ function inboxView() {
       h(
         "div",
         { class: "meta" },
-        h("span", { class: "proj" }, where(card)),
+        h("span", { class: "proj", title: where(card) }, where(card)),
         h("span", { class: "sep" }, "·"),
         h("span", { "data-tone": card.status }, cardStatusLine(card)),
         card.kind === "done" ? null : h("span", { class: "ago" }, timeAgo(card.at)),
@@ -465,7 +506,7 @@ function render() {
   else if (view.mode === "list") next = listView();
   else next = inboxView();
   root.append(next);
-  if (view.mode === "inbox" && help) root.append(helpOverlay());
+  if (view.mode === "inbox" && help) next.append(helpOverlay());
   lastRendered = view.mode === "inbox" ? curKey : null;
 
   if (view.mode === "inbox" && scroll.key && scroll.key === next.dataset.key) {
@@ -482,6 +523,7 @@ function render() {
     }
   }
   if (view.mode === "list") root.querySelector(".arow.sel")?.scrollIntoView({ block: "nearest" });
+  fit();
 }
 
 /* ---------- keys ---------- */

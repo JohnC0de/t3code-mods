@@ -12,6 +12,10 @@
     live. A runtime on an older main process falls back to the old whole-object save.
   - `agent-inbox` 0.2.0: all running apps share one strip, one shortcut and one merged inbox.
     The first app to start shows them; when it quits, another app takes over.
+  - `agent-inbox` 0.2.1: the strip and the inbox follow the app's zoom, so they are no longer
+    cut off at 110 % or more. Each window takes the size of its card. The peek shows the peek
+    card (not the inbox card), its clicks go through to the window below, and it has no tooltip
+    over it. On Windows both windows stay above the taskbar and other topmost windows.
   - New mod `app-badge`: a named app gets "T3 <name>" in its window title and, on Windows, a
     letter badge on its taskbar button.
   - `agent-instructions` 1.1.0: `instructions.<name>.md` adds notes for one app only.

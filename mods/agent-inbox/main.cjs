@@ -9,12 +9,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHub, endpointFor } = require("./hub.cjs");
+const { stripBounds, panelBounds } = require("./place.cjs");
 
 const SHORTCUT = "Control+Alt+Space";
 const PAGE = "t3code://app/__mods/agent-inbox/";
-const PANEL = { inbox: { width: 460, height: 600 }, peek: { width: 340, height: 170 } };
-const SHADOW = 8; // transparent margin around the pill and the card, in each page's CSS
+// CSS px: the size before the page measured its card, and the largest the window gets.
+const PANEL = { inbox: { width: 444, height: 600 }, peek: { width: 340, height: 220 } };
+// On Windows "floating" (the default) puts a window behind the taskbar, under other topmost windows.
+const LEVEL = "pop-up-menu";
 const DRAG_QUIET_MS = 1500; // after a drag, models that still carry the old position are ignored
+const STRIP_SHOW_MS = 1000; // show the strip without its measured size after this long
 
 /** @type {import("../../loader/types/t3mods").MainEntry} */
 module.exports = (ctx) => {
@@ -29,13 +33,27 @@ module.exports = (ctx) => {
   let strip = null;
   let panel = null;
   let view = null; // what the panel shows, or null when hidden
-  let stripSize = { width: 56, height: 160 };
+  let stripSize = { width: 56, height: 160 }; // CSS px, as strip.js measured the pill
+  let stripFitted = false; // the strip waits for its size, so it does not show clipped
+  let panelSize = null; // CSS px, as panel.js measured the card; null: PANEL
+  let panelTop = null; // DIP; the top edge stays put while the inbox is open
+  let panelAnchor = null; // DIP; a peek's center, next to its dot
+  let panelFocus = false; // the panel takes the keyboard when it shows
+  let renderSeq = 0; // the newest panel render; older page answers are ignored
   let stripY = 0.5; // 0 top .. 1 bottom of the work area; the shared value lives in renderer.js
   let dragAt = 0;
   let shortcutTimer = 0;
   let quitting = false;
 
   const alive = (w) => w && !w.isDestroyed();
+  const zoom = (w) => (alive(w) && w.webContents.getZoomFactor()) || 1;
+  // Topmost again and above the other topmost windows; the level can drop on Windows. Only for
+  // a shown window: on a hidden one (Windows) it leaves the window blank when it shows.
+  const raise = (w) => {
+    if (!alive(w) || !w.isVisible()) return;
+    w.setAlwaysOnTop(true, LEVEL);
+    w.moveTop();
+  };
   const push = (w, code) => {
     if (alive(w) && !w.webContents.isLoading()) w.webContents.executeJavaScript(code).catch(() => {});
   };
@@ -59,12 +77,13 @@ module.exports = (ctx) => {
       ...options,
     });
     ours.add(w);
-    w.setAlwaysOnTop(true, "floating");
+    w.setAlwaysOnTop(true, LEVEL);
     w.setMenu(null);
     w.on("closed", () => ours.delete(w));
+    // isLoading() is still true here, so push() would drop these.
     w.webContents.on("did-finish-load", () => {
-      if (model) push(w, `window.inbox?.update(${JSON.stringify(model)})`);
-      if (w === panel && view) push(w, `window.inbox?.show(${JSON.stringify(view)})`);
+      if (model) w.webContents.executeJavaScript(`window.inbox?.update(${JSON.stringify(model)})`).catch(() => {});
+      if (w === panel && view) renderPanel();
     });
     w.loadURL(PAGE + file).catch((e) => ctx.log(`could not load ${file}:`, e.message));
     return w;
@@ -74,17 +93,24 @@ module.exports = (ctx) => {
   const workArea = () => (alive(strip) ? screen.getDisplayMatching(strip.getBounds()) : screen.getPrimaryDisplay()).workArea;
   function placeStrip() {
     if (!alive(strip)) return;
-    const wa = workArea();
-    const { width, height } = stripSize;
-    const y = Math.round(Math.min(Math.max(wa.y + stripY * wa.height - height / 2, wa.y), wa.y + wa.height - height));
-    // The pill's shadow margin goes off screen, so the pill touches the edge.
-    strip.setBounds({ x: wa.x + wa.width - width + SHADOW - 2, y, width, height });
+    strip.setBounds(stripBounds({ area: workArea(), size: stripSize, z: zoom(strip), y: stripY }));
+  }
+  function showStrip() {
+    if (!alive(strip) || !stripFitted || model?.strip === false || strip.isVisible()) return;
+    strip.showInactive();
+    raise(strip);
   }
   function ensureStrip() {
     if (alive(strip)) return strip;
+    stripFitted = false;
     strip = makeWindow("strip.html", { width: stripSize.width, height: stripSize.height, focusable: false, title: "Agent Inbox strip" });
     placeStrip();
-    strip.once("ready-to-show", () => model?.strip !== false && strip.showInactive());
+    strip.once("ready-to-show", () => {
+      setTimeout(() => {
+        stripFitted = true;
+        showStrip();
+      }, STRIP_SHOW_MS);
+    });
     // A drag on the grip moves the window freely; keep the height and snap back to the edge.
     strip.on("moved", () => {
       const b = strip.getBounds();
@@ -104,6 +130,7 @@ module.exports = (ctx) => {
   // ---------- panel ----------
   function ensurePanel() {
     if (alive(panel)) return panel;
+    panelSize = null;
     panel = makeWindow("panel.html", { width: PANEL.inbox.width, height: PANEL.inbox.height, title: "Agent Inbox" });
     // An inbox the user opened closes when they click elsewhere; a send in progress still finishes.
     panel.on("blur", () => {
@@ -113,25 +140,50 @@ module.exports = (ctx) => {
     });
     return panel;
   }
-  function placePanel(size, centerY) {
-    const wa = workArea();
-    const s = alive(strip) && strip.isVisible() ? strip.getBounds() : { x: wa.x + wa.width, y: wa.y + wa.height / 2, height: 0 };
-    const cy = centerY ?? s.y + s.height / 2;
-    const y = Math.round(Math.min(Math.max(cy - size.height / 2, wa.y), wa.y + wa.height - size.height));
-    panel.setBounds({ x: Math.round(s.x - size.width + SHADOW * 2), y, width: size.width, height: size.height });
+  // The panel's size comes from the page: show() renders the view and returns the card's size,
+  // and fitPanel() reports later changes. The window shows only once it has that size.
+  const panelMax = (mode) => PANEL[mode === "peek" ? "peek" : "inbox"];
+  function placePanel() {
+    if (!alive(panel) || !view) return;
+    const s = alive(strip) && strip.isVisible() ? strip.getBounds() : null;
+    const max = panelMax(view.mode);
+    const size = { width: panelSize?.width ?? max.width, height: Math.min(panelSize?.height ?? max.height, max.height) };
+    const b = panelBounds({ area: workArea(), strip: s, size, z: zoom(panel), centerY: panelAnchor ?? undefined, top: panelTop ?? undefined });
+    if (view.mode !== "peek") panelTop = b.y;
+    panel.setBounds(b);
   }
   function showPanel(next, { focus, centerY } = {}) {
     ensurePanel();
+    // A new inbox, or a change to or from a peek, is placed anew; a change inside the inbox
+    // (another card, the list) keeps the top edge.
+    if (!panel.isVisible() || next.mode === "peek" || view?.mode === "peek") panelTop = null;
     view = next;
-    placePanel(next.mode === "peek" ? PANEL.peek : PANEL.inbox, centerY);
-    push(panel, `window.inbox?.show(${JSON.stringify(next)})`);
-    if (focus) {
+    panelAnchor = next.mode === "peek" ? (centerY ?? null) : null;
+    panelFocus = !!focus;
+    // A peek is a picture only: the pointer and clicks go through it.
+    panel.setIgnoreMouseEvents(next.mode === "peek");
+    if (!panel.webContents.isLoading()) renderPanel(); // else did-finish-load renders it
+  }
+  async function renderPanel() {
+    const seq = ++renderSeq;
+    const limits = { id: seq, maxHeight: Math.floor(Math.min(panelMax(view.mode).height, workArea().height / zoom(panel))) };
+    const size = await panel.webContents.executeJavaScript(`window.inbox?.show(${JSON.stringify(view)}, ${JSON.stringify(limits)})`).catch(() => null);
+    if (seq !== renderSeq || !view || !alive(panel)) return;
+    panelSize = size?.width > 0 && size?.height > 0 ? size : null; // an older page returns nothing
+    placePanel();
+    if (panelFocus) {
+      panelFocus = false;
       panel.show();
       panel.focus();
     } else if (!panel.isVisible()) panel.showInactive();
+    raise(strip);
+    raise(panel);
   }
   function hidePanel() {
     view = null;
+    panelTop = panelAnchor = null;
+    panelFocus = false;
+    renderSeq++;
     if (alive(panel)) panel.hide();
   }
   const cardFor = (threadKey) => model?.cards.find((c) => c.threadKey === threadKey)?.key ?? null;
@@ -233,7 +285,7 @@ module.exports = (ctx) => {
     ensureStrip();
     for (const w of ours) push(w, `window.inbox?.update(${JSON.stringify(model)})`);
     if (model.strip === false) strip.hide();
-    else if (!strip.isVisible() && !strip.webContents.isLoading()) strip.showInactive();
+    else showStrip();
   }
 
   // Runs an action in this app (the hub calls it for threads this app owns).
@@ -271,7 +323,10 @@ module.exports = (ctx) => {
   app.whenReady().then(() => {
     ready = true;
     if (hub.isLeader()) startLeading();
-    const replace = () => placeStrip();
+    const replace = () => {
+      placeStrip();
+      placePanel();
+    };
     screen.on("display-metrics-changed", replace);
     screen.on("display-added", replace);
     screen.on("display-removed", replace);
@@ -291,9 +346,11 @@ module.exports = (ctx) => {
     // The palette commands run in any app; a follower's call goes to the leader.
     openInbox: (opts) => hub.ui("openInbox", opts),
     openList: () => hub.ui("openList"),
-    peek({ threadKey, y }) {
+    // `offset`: the dot's center in the strip page (CSS px). `y` (screen) is for an older main.
+    peek({ threadKey, y, offset }) {
       if (!model || (alive(panel) && panel.isVisible() && view && view.mode !== "peek")) return false;
-      showPanel({ mode: "peek", threadKey }, { centerY: y });
+      const centerY = typeof offset === "number" && alive(strip) ? strip.getBounds().y + offset * zoom(strip) : y;
+      showPanel({ mode: "peek", threadKey }, { centerY });
       return true;
     },
     unpeek() {
@@ -304,9 +361,20 @@ module.exports = (ctx) => {
       hidePanel();
       return true;
     },
+    // Strip only: the pill's size in CSS px. strip.js calls it again when the zoom changes.
     fit({ width, height }) {
       stripSize = { width: Math.ceil(width), height: Math.ceil(height) };
       placeStrip();
+      stripFitted = true;
+      showStrip();
+      return true;
+    },
+    // Panel only: the card's size after a change in the page (CSS px). `id` is the render it
+    // belongs to; a size from an older render is ignored.
+    fitPanel({ id, width, height }) {
+      if (id !== renderSeq || !view || !(width > 0 && height > 0)) return false;
+      panelSize = { width, height };
+      if (alive(panel) && panel.isVisible()) placePanel();
       return true;
     },
     dragEnd() {
