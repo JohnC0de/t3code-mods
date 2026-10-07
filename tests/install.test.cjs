@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const SP = require("../loader/server-patches.cjs");
+const { buildAsar, rawFs } = require("./helpers/asar.cjs");
 
 const cli = path.join(__dirname, "..", "loader", "t3mods.mjs");
 const skip = process.platform !== "win32" && "Windows install layout";
@@ -21,7 +23,7 @@ function fakeApp() {
   // T3MODS_POST_UPDATE: no scheduled task for a test kit.
   const run = (cmd) =>
     spawnSync(process.execPath, [cli, cmd, "--app", dir], { encoding: "utf8", env: { ...process.env, T3MODS_HOME: kit, T3MODS_POST_UPDATE: "1" } });
-  return { res, run, p: (n) => path.join(res, n) };
+  return { res, kit, run, p: (n) => path.join(res, n) };
 }
 
 test("install switches to the shim and links the unpacked files; uninstall restores them", { skip }, () => {
@@ -79,4 +81,21 @@ test("install refuses a folder without a bundle (an update installer is mid-way)
   assert.notEqual(install.status, 0);
   assert.match(install.stderr, /is an update installing/);
   assert.ok(!fs.existsSync(p("app")), "a shim here could make the installer abort");
+});
+
+test("uninstall also takes the server patches out of server.asar and stops their reapply", { skip }, () => {
+  const { run, kit, p } = fakeApp();
+  assert.equal(run("install").status, 0);
+  // The state `server-patch` leaves: a baked server.asar, the original beside it, and the flag
+  // that makes each install (the post-update task) bake again.
+  buildAsar(p("server.asar"), { [`${SP.DIST}/bin.mjs`]: SP.markText("export default 1;\n", ["m/k"]) });
+  rawFs.writeFileSync(p("server.asar.t3mods-orig"), "original server");
+  fs.writeFileSync(path.join(kit, "server-patch.json"), "{\"on\":true}");
+
+  const uninstall = run("uninstall");
+  assert.equal(uninstall.status, 0, uninstall.stderr);
+  assert.equal(rawFs.readFileSync(p("server.asar"), "utf8"), "original server");
+  assert.ok(!rawFs.existsSync(p("server.asar.t3mods-orig")));
+  assert.ok(!fs.existsSync(path.join(kit, "server-patch.json")));
+  assert.equal(fs.readFileSync(p("app.asar"), "utf8"), "original bundle");
 });

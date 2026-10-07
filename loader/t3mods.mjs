@@ -477,6 +477,12 @@ function uninstall() {
   if (isWin) {
     if (running(t.dir)) throw new Error("T3 Code is running; quit it first.");
     unregisterPostUpdateTask();
+    // Server patches written into server.asar outlive the shim; without the flag, a later
+    // install would write them again.
+    if (fs.existsSync(serverAsarFiles(t.dir).orig) || fs.existsSync(serverPatchFlag())) {
+      undoServerPatch(t.dir);
+      fs.rmSync(serverPatchFlag(), { force: true });
+    }
   }
   if (!writable(res) && isLinux) runAsRoot(["sh", path.join(kitHome, "linux", "system.sh"), "uninstall", res]);
   else {

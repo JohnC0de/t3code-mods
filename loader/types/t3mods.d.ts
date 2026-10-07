@@ -239,8 +239,15 @@ export interface MainContext extends TierContext {
   renderer<T = Record<string, (...args: any[]) => unknown>>(): Remote<T>;
 }
 
-/** Return a cleanup function, or an object of methods (+ optional dispose) for api.server(). */
+/**
+ * Return a cleanup function, or an object of methods (+ optional dispose) for api.server().
+ * The cleanup runs before a hot reload and when the mod is turned off.
+ */
 export type ServerEntry = (ctx: TierContext) => void | (() => void) | ({ dispose?(): void } & Record<string, (...args: any[]) => unknown>);
+/**
+ * Like ServerEntry, for api.main(). Main code loads once at app start and stops with the app:
+ * the loader never calls its cleanup or dispose, and a change needs a restart.
+ */
 export type MainEntry = (ctx: MainContext) => void | (() => void) | ({ dispose?(): void } & Record<string, (...args: any[]) => unknown>);
 
 // ---------- patches.cjs ----------

@@ -1,7 +1,9 @@
 # Writing mods
 
-A mod is a folder in `~/.t3/mods/<id>/`. The folder name is the mod id. Every file is
-optional; each one runs at its own level (see the table in the README).
+A mod is a folder in `~/.t3/mods/<id>/`. The folder name is the mod id. For a mod that only
+runs on your machine every file is optional; each one runs at its own level (see the table in
+the README). To pack, share or publish a mod, it needs a `mod.json` with an `id` and a semver
+`version` ([Publish to the registry](#publish-to-the-registry)).
 `node loader/t3mods.mjs new <id>` creates one from a template, with editor types.
 
 ```
@@ -26,12 +28,14 @@ on and off.
   "name": "My mod",
   "version": "1.0.0",
   "description": "What it does.",
-  "requires": ["core/timeline-row"]
+  "requires": ["core/sidebar-footer", "core/palette"]
 }
 ```
 
-`requires` lists mods (`"core"`) or single patches (`"core/timeline-row"`). If one of them
-fails on the installed app build, the mod does not start, and the Mods page shows why.
+`requires` lists mods (`"core"`) or single patches (`"core/sidebar-footer"`). If one of them
+fails on the installed app build, the mod does not start, and the Mods page shows why. The
+example below draws in the sidebar footer and adds a palette command, so it requires those
+two core patches.
 
 ## renderer.js
 
@@ -108,6 +112,11 @@ it, and reject otherwise. `mods/agent-inbox` is a full example.
 Export a function. Return a cleanup function, or an object of methods. The renderer calls
 the methods through `api.server()` or `api.main()`; an optional `dispose` method is the
 cleanup.
+
+The two files differ in when the cleanup runs. `server.cjs` hot-reloads: when you save it or
+turn the mod off, the loader runs the cleanup, then requires the new file. `main.cjs` loads
+once at app start and stops with the app: the loader never calls its cleanup, and a change
+needs a restart.
 
 ```js
 /** @type {import("../../t3mods/types/t3mods").ServerEntry} */
@@ -195,6 +204,8 @@ update; without the loader, run `server-patch` again after each update.
 
 ## Share a mod
 
+`pack` needs a `mod.json` with an `id` and a semver `version`.
+
 ```sh
 node loader/t3mods.mjs pack ~/.t3/mods/my-mod      # my-mod-1.0.0.zip
 node loader/t3mods.mjs add my-mod-1.0.0.zip        # or an https URL
@@ -205,18 +216,21 @@ node loader/t3mods.mjs add my-mod-1.0.0.zip        # or an https URL
 The registry at https://t3mods.jonn.cc lists mods that anyone can install with `t3mods add <id>`
 or from the Browse section of the Mods page.
 
-1. Create a token at https://t3mods.jonn.cc/settings/tokens (it is shown once) and run
+1. Sign in with GitHub at https://t3mods.jonn.cc/login. The registry uses your GitHub login as
+   your author name.
+2. Create a publishing token at https://t3mods.jonn.cc/settings/tokens (it is shown once) and run
    `t3mods login` (it reads the token from `T3MODS_TOKEN` or stdin, or asks on a terminal; a token on
    the command line stays in shell history). The token is saved in `~/.t3/t3mods-registry.json`
    (mode 0600 where the system supports it). `T3MODS_TOKEN` overrides the saved token.
-2. Set `id` (lowercase letters, digits, `.`, `_`, `-`) and `version` (semver, for example `1.0.0`) in `mod.json`.
+3. Set `id` (lowercase letters, digits, `.`, `_`, `-`) and `version` (semver, for example `1.0.0`) in `mod.json`.
    A `README.md` in the mod folder becomes the mod's page.
-3. Run `node loader/t3mods.mjs publish ~/.t3/mods/my-mod --changelog "What changed"`.
+4. Run `node loader/t3mods.mjs publish ~/.t3/mods/my-mod --changelog "What changed"`.
 
 Versions are immutable: to change a published mod, publish a new version. The first publisher of
 an id owns it. The registry shows what a mod contains (Styles, UI code, Runs in the backend, ...) and
-the loader warns before it installs a mod that runs code in the backend or the main process
-(`server.cjs`, `server-patches.cjs`, `main.cjs`, `patches.cjs`), and asks again when an update adds one.
+the loader warns when a mod runs code with full access (`server.cjs`, `server-patches.cjs`,
+`main.cjs`, `patches.cjs`). Browse in the app asks before it installs such a mod; `t3mods add`
+prints the warning and installs. `t3mods update` and Browse ask when an update adds such a file.
 
 Users run `t3mods search <words>`, `t3mods add <id>[@version]` and `t3mods update [id]`. A link
 `t3mods://install/<id>[@version]` (the registry's Install button) opens T3 Code, shows a

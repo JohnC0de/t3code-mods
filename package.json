@@ -2,7 +2,7 @@
   "name": "t3code-mods",
   "private": true,
   "version": "0.3.0",
-  "description": "Mod loader for T3 Code: CSS, React and backend mods with hot reload. Not affiliated with T3 Code.",
+  "description": "Mod loader for T3 Code: customize the app with mods you turn on and off, write and share, without a fork. Not affiliated with T3 Code.",
   "license": "MIT",
   "repository": "github:JohnC0de/t3code-mods",
   "bin": {

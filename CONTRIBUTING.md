@@ -12,8 +12,8 @@ git config core.hooksPath .githooks   # runs the unit tests before each commit
 bun run test
 ```
 
-You need [Bun](https://bun.sh) or Node 22+ for the scripts. The loader itself has no
-dependencies.
+You need [Bun](https://bun.sh) and Node 22+ for the scripts: `bun run` starts them, and they
+run the tests and the CLI with `node`. The loader itself has no dependencies.
 
 ## Where things live
 
