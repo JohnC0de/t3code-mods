@@ -123,6 +123,8 @@ Messages are JSON lines.
 - `act` goes to the app that owns the thread (matched by `ref.environmentId` and `threadId`),
   which runs it in its app page. An unknown thread is refused; an app that does not answer
   within 15 s gives an error. `open` also focuses that app's window.
+- After `main.cjs` loads again (hot reload), it calls the renderer export `republish()`, so
+  its new hub gets this app's model at once instead of at the next change.
 - The palette commands "open the inbox" and "show all agents" work in every app: a follower
   sends them to the leader as `ui` calls.
 - When the leader quits, the followers pick a new leader (random delay, retry); the new leader

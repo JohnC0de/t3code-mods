@@ -142,3 +142,41 @@ test("a broken server mod does not stop the backend", async (t) => {
   await new Promise((r) => setTimeout(r, 800));
   assert.equal(exited, false);
 });
+
+test("a server reload runs dispose, then ctx.lifecycle cleanups, and reloads the files the entry required", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "t3mods-server-"));
+  const mods = path.join(root, "mods");
+  const dir = path.join(mods, "life");
+  const log = path.join(root, "log.txt"); // outside the mods folder, so writes do not trigger a reload
+  fs.mkdirSync(dir, { recursive: true });
+  const entry = (v) =>
+    `const fs = require("node:fs"); const helper = require("./helper.cjs");
+module.exports = (ctx) => {
+  ctx.lifecycle.listen(process, "t3mods-life", () => {});
+  ctx.lifecycle.own(() => fs.appendFileSync(${JSON.stringify(log)}, "own${v} "));
+  ctx.lifecycle.signal.addEventListener("abort", () => fs.appendFileSync(${JSON.stringify(log)}, "abort${v} "));
+  return { info: () => ({ v: ${v}, helper: helper.v, listeners: process.listenerCount("t3mods-life") }), dispose() { fs.appendFileSync(${JSON.stringify(log)}, "dispose${v} "); } };
+};`;
+  fs.writeFileSync(path.join(dir, "helper.cjs"), "module.exports = { v: 1 };");
+  fs.writeFileSync(path.join(dir, "server.cjs"), entry(1));
+  const child = startBackend(mods, { T3MODS_RPC_TOKEN: "secret-token-0123456789", T3MODS_MAIN_PID: "4343" });
+  t.after(() => {
+    child.kill();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const runFile = path.join(mods, ".t3mods", "run", "server-4343.json");
+  const { port } = await waitFor(() => fs.existsSync(runFile) && JSON.parse(fs.readFileSync(runFile, "utf8")));
+  const info = () =>
+    fetch(`http://127.0.0.1:${port}/life/info`, { method: "POST", headers: { "x-t3mods-token": "secret-token-0123456789" }, body: "[]" })
+      .then((r) => r.json())
+      .then((b) => b.value);
+  assert.deepEqual(await info(), { v: 1, helper: 1, listeners: 1 });
+
+  fs.writeFileSync(path.join(dir, "helper.cjs"), "module.exports = { v: 2 };");
+  fs.writeFileSync(path.join(dir, "server.cjs"), entry(2));
+  let now;
+  const end = Date.now() + 5000;
+  while (Date.now() < end && (now = await info())?.v !== 2) await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(now, { v: 2, helper: 2, listeners: 1 }, "the helper loaded again, and the old listener is gone");
+  assert.equal(fs.readFileSync(log, "utf8"), "dispose1 abort1 own1 ", "dispose first, then the signal and the owned cleanups");
+});

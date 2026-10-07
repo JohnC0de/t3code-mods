@@ -212,8 +212,65 @@ await step("mod state: a write from another app reaches the cell, and a page wri
   await until("cell b unset", "window.__e2eState.b.get()==='none'");
 });
 
+await step("main.cjs with a cleanup hot-reloads: main, its helper, off and on; a page edit does not reload it", async () => {
+  const mainCall = (id, method) => evaluate(`fetch('/__mods/rpc/main/${id}/${method}',{method:'POST',body:'[]'}).then(r=>r.json())`);
+  const info = async () => (await mainCall("e2e-main", "info")).value ?? null;
+  // Counters live in the main process's globalThis, so they survive the reloads.
+  const entry = (v) => `const helper = require("./helper.cjs");
+module.exports = (ctx) => {
+  const g = (globalThis.__e2eMain ??= { starts: 0, disposes: 0, owned: 0 });
+  g.starts++;
+  ctx.lifecycle.listen(ctx.electron.app, "e2e-main-ping", () => {});
+  ctx.lifecycle.own(() => g.owned++);
+  return { info: () => ({ v: ${v}, helper: helper.v, ...g, listeners: ctx.electron.app.listenerCount("e2e-main-ping") }), dispose() { g.disposes++; } };
+};`;
+  const r = await installZip([
+    ["mod.json", JSON.stringify({ id: "e2e-main", version: "1.0.0" })],
+    ["main.cjs", entry(1)],
+    ["helper.cjs", "module.exports = { v: 1 };"],
+    ["page.js", "export const page = 1;"],
+  ]);
+  assert(r.ok && r.level === "hot", `install: ${JSON.stringify(r)}`);
+  const first = await until("main started without a restart", `fetch('/__mods/rpc/main/e2e-main/info',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>j.value?.v===1 && j.value)`);
+  assert(first.listeners === 1, `listeners: ${first.listeners}`);
+  const dir = path.join(modsDir, "e2e-main");
+
+  fs.writeFileSync(path.join(dir, "main.cjs"), entry(2));
+  await until("main v2", `fetch('/__mods/rpc/main/e2e-main/info',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>j.value?.v===2)`);
+  fs.writeFileSync(path.join(dir, "helper.cjs"), "module.exports = { v: 2 };");
+  await until("helper v2", `fetch('/__mods/rpc/main/e2e-main/info',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>j.value?.helper===2)`);
+  const now = await info();
+  assert(now.starts - first.starts === 2 && now.disposes - first.disposes === 2 && now.owned - first.owned === 2, `two reloads, one dispose and one cleanup each: ${JSON.stringify({ first, now })}`);
+  assert(now.listeners === 1, `the old listeners are gone: ${now.listeners}`);
+
+  fs.writeFileSync(path.join(dir, "page.js"), "export const page = 2;");
+  await sleep(800);
+  assert((await info()).starts === now.starts, "a page edit reloaded main.cjs");
+
+  await api("toggle", { id: "e2e-main", enabled: false });
+  await until("off: main stopped", `fetch('/__mods/rpc/main/e2e-main/info',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>!j.ok)`);
+  await api("toggle", { id: "e2e-main", enabled: true });
+  const back = await until("on: main started", `fetch('/__mods/rpc/main/e2e-main/info',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>j.value)`);
+  assert(back.disposes === now.disposes + 1 && back.starts === now.starts + 1 && back.listeners === 1, JSON.stringify(back));
+  const idx = await evaluate("fetch('/__mods/index.json').then(r=>r.json())");
+  assert(idx.mods.find((m) => m.id === "e2e-main")?.level === "hot" && !idx.pending.restart.includes("e2e-main"), "level hot, no restart asked");
+});
+
+await step("main.cjs without a cleanup keeps running and asks for a restart", async () => {
+  const r = await installZip([
+    ["mod.json", JSON.stringify({ id: "e2e-main-static", version: "1.0.0" })],
+    ["main.cjs", "module.exports = () => ({ v: () => 1 });"],
+  ]);
+  assert(r.ok, JSON.stringify(r));
+  await until("started", `fetch('/__mods/rpc/main/e2e-main-static/v',{method:'POST',body:'[]'}).then(r=>r.json()).then(j=>j.value===1)`);
+  fs.writeFileSync(path.join(modsDir, "e2e-main-static", "main.cjs"), "module.exports = () => ({ v: () => 2 });");
+  await until("restart asked", "fetch('/__mods/index.json').then(r=>r.json()).then(i=>i.pending.restart.includes('e2e-main-static') && i.mods.find(m=>m.id==='e2e-main-static')?.level==='restart')");
+  const still = await evaluate(`fetch('/__mods/rpc/main/e2e-main-static/v',{method:'POST',body:'[]'}).then(r=>r.json())`);
+  assert(still.value === 1, `the running copy still answers: ${JSON.stringify(still)}`);
+});
+
 await step("uninstall removes the test mods", async () => {
-  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent", "e2e-threads", "e2e-state"]) {
+  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent", "e2e-threads", "e2e-state", "e2e-main", "e2e-main-static"]) {
     const r = await api("uninstall", { id });
     assert(r.ok, `${id}: ${r.error}`);
   }

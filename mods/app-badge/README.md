@@ -25,7 +25,9 @@ T3CODE_HOME=~/.t3-work  T3MODS_APP_NAME=Work  T3MODS_APP_COLOR=#F59E0B
 | `T3MODS_APP_NAME` | The name in the title and on the badge. |
 | `T3MODS_APP_COLOR` | Badge color as CSS hex (`#rgb` or `#rrggbb`). Default: a color from a fixed palette, picked by the name (amber for "Work"). |
 
-Both apps load the same mods folder, so install the mod once. A change needs an app restart.
+Both apps load the same mods folder, so install the mod once. With loader 0.4.0 or later a
+change applies at once, and turning the mod off removes the badge and the new title; older
+loaders need an app restart.
 
 ## Replaces `work-badge`
 

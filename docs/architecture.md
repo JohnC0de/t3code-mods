@@ -43,7 +43,8 @@ If the loader fails, the app starts without mods.
 - **Server and main.** `server.cjs` runs in the backend, `main.cjs` in the Electron main
   process. `api.server()` and `api.main()` send calls to `/__mods/rpc/` on the app origin.
   The main process runs `main.cjs` calls itself and forwards `server.cjs` calls to the
-  backend over a local HTTP port that needs a per-run token. `ctx.renderer()` goes the other
+  backend over a local HTTP port that needs a per-run token. Both tiers reload on save when
+  the entry returns a cleanup (`main.cjs` only then; see writing-mods). `ctx.renderer()` goes the other
   way: main runs `__t3mods.callRenderer` in the app page, which calls the mod's renderer
   exports. Pages that a mod opens from its folder (`/__mods/<id>/*.html`) count as mod
   windows, not app windows: no runtime, no hot update, no install dialogs.

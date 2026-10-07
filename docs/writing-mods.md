@@ -114,17 +114,41 @@ Export a function. Return a cleanup function, or an object of methods. The rende
 the methods through `api.server()` or `api.main()`; an optional `dispose` method is the
 cleanup.
 
-The two files differ in when the cleanup runs. `server.cjs` hot-reloads: when you save it, the
-loader runs the cleanup, then requires the new file. When you turn the mod off, the loader runs
-the cleanup and does not load the file again. `main.cjs` loads
-once at app start and stops with the app: the loader never calls its cleanup, and a change
-needs a restart.
+Both hot-reload. When you save the file, the loader runs the cleanup, then requires the new
+file. When you turn the mod off, it runs the cleanup and does not load the file again. Before
+a load, the loader drops every file of the mod folder from Node's `require` cache, so files that
+the entry requires load again too.
+
+- `server.cjs` reloads when you save `server.cjs` or `mod.json`.
+- `main.cjs` reloads when you save `main.cjs`, a file it required, or any `.mjs` file in the
+  mod folder (Node keeps ES modules, so the loader cannot tell which ones main imported). It
+  does not reload for pages, CSS or `renderer.js`. It hot-reloads only if it returns a cleanup
+  function or a `dispose` method; without one, it loads once at app start and a change needs a
+  restart. Loader 0.3 and older never reload `main.cjs`.
+
+The cleanup must release what the mod made: windows, global shortcuts, timers, servers.
+`ctx.lifecycle` helps: `ctx.lifecycle.listen(app, "browser-window-created", fn)` adds a
+listener that goes when the mod stops, `ctx.lifecycle.own(fn)` runs `fn` then, and
+`ctx.lifecycle.signal` aborts then. These run after the cleanup, newest first.
+
+Node also keeps ES modules: `import()` a file with a query (`` `${url}?v=${Date.now()}` ``) to
+get the new copy after a reload. The files that it imports stay as they were.
 
 ```js
 /** @type {import("../../t3mods/types/t3mods").ServerEntry} */
 module.exports = (ctx) => ({
   info: (n) => ({ n, pid: process.pid, mod: ctx.id }),
 });
+```
+
+```js
+/** @type {import("../../t3mods/types/t3mods").MainEntry} */
+module.exports = (ctx) => {
+  const { app, BrowserWindow } = ctx.electron;
+  ctx.lifecycle.listen(app, "browser-window-focus", (_e, w) => ctx.log("focus", w.id));
+  const timer = setInterval(() => ctx.log("windows:", BrowserWindow.getAllWindows().length), 60_000);
+  return { dispose: () => clearInterval(timer) }; // a cleanup: main.cjs hot-reloads
+};
 ```
 
 In `main.cjs`, `ctx.renderer()` calls the other way: the named exports of the mod's

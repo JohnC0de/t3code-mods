@@ -70,7 +70,7 @@ installed. Full-access code is `patches.cjs`, `server.cjs`, `server-patches.cjs`
 | `patches.cjs` | app code, as it loads | page reloads |
 | `server.cjs` | backend (Node) | re-required in place |
 | `server-patches.cjs` | backend code, as it loads | app restart |
-| `main.cjs` | Electron main | app restart |
+| `main.cjs` | Electron main | re-required in place if it returns a cleanup, else app restart |
 
 Read [Writing mods](docs/writing-mods.md), the [examples](examples/) and the typed API in
 [`loader/types/t3mods.d.ts`](loader/types/t3mods.d.ts). Prefer the API to patches: an app update

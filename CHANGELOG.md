@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **`main.cjs` hot-reloads** (loader 0.4.0) when it returns a cleanup function or a `dispose`
+  method. A save of `main.cjs`, of a file it required, or of an `.mjs` file in the mod folder
+  runs the cleanup and loads it again; turning the mod off stops it, turning it on or
+  installing it starts it, without a restart. Before a load, the loader drops all of the mod
+  folder's files from the `require` cache (also for `server.cjs`). A `main.cjs` without a
+  cleanup loads once, as before, and the Mods page asks for a restart.
+  - `ctx.lifecycle` in both tiers: `own(fn)`, `listen(emitter, event, fn)` and `signal`, which
+    run when the mod stops, after its cleanup.
+  - Check a `dispose` that you wrote for an older loader: that loader never called it, and
+    now it runs before each reload. It must release everything the mod made.
+  - `agent-inbox` 0.3.0 and `app-badge` 0.2.0 hot-reload.
 - **Several apps at once:** apps with their own `T3CODE_HOME` can share one mods folder.
   `ctx.app` (main and server tiers) and `api.app` (renderer) give `{ id, name, home }`;
   `T3MODS_APP_NAME` sets the name, and `t3mods dev --isolated` sets it to `Dev`.

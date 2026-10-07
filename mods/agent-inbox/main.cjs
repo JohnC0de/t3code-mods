@@ -2,7 +2,8 @@
 // shortcut, and the relay between them and the app page (renderer.js). Several T3 Code apps can
 // run from one mods folder: hub.cjs elects one of them leader; only the leader has the windows
 // and the shortcut, and it shows the models of all apps merged. Pages and transport:
-// CONTRACT.md. A change here needs an app restart; the pages reload by themselves.
+// CONTRACT.md. On loader 0.4.0 or later a save here reloads this file (dispose, then a new
+// start); older loaders need an app restart. The pages reload by themselves.
 "use strict";
 
 const fs = require("node:fs");
@@ -25,6 +26,8 @@ module.exports = (ctx) => {
   const { app, BrowserWindow, screen, globalShortcut } = ctx.electron;
   const renderer = ctx.renderer();
   const me = ctx.app ?? { id: "default", name: null, home: "" }; // an older loader has no ctx.app
+  // Listeners that go when the mod stops. An older loader has no lifecycle and never stops main.
+  const listen = ctx.lifecycle?.listen ?? ((emitter, event, fn) => emitter.on(event, fn));
   const ours = new Set();
   let model = null; // what the windows show: the merged model of all apps (leader only)
   let merge = null; // mergeModels from model.mjs, loaded below
@@ -44,6 +47,7 @@ module.exports = (ctx) => {
   let dragAt = 0;
   let shortcutTimer = 0;
   let quitting = false;
+  let stopped = false; // disposed: late callbacks must not make windows again
 
   const alive = (w) => w && !w.isDestroyed();
   const zoom = (w) => (alive(w) && w.webContents.getZoomFactor()) || 1;
@@ -235,15 +239,15 @@ module.exports = (ctx) => {
   }
   // Our windows must not keep the app running: when the last app window closes, close them too,
   // so the app quits as it would without the mod (and the loader's update task can run).
-  app.on("browser-window-created", (_event, w) => {
+  listen(app, "browser-window-created", (_event, w) => {
     setImmediate(() => {
-      if (ours.has(w)) return;
-      w.once("closed", () => {
+      if (ours.has(w) || stopped) return;
+      listen(w, "closed", () => {
         if (BrowserWindow.getAllWindows().every((x) => ours.has(x) || x.isDestroyed())) destroyAll();
       });
     });
   });
-  app.on("before-quit", () => {
+  listen(app, "before-quit", () => {
     quitting = true;
     stopLeading();
     hub.close(); // followers elect a new leader at once
@@ -268,7 +272,7 @@ module.exports = (ctx) => {
     shortcutTimer = setTimeout(() => registerShortcut(tries + 1), 1000);
   }
   function startLeading() {
-    if (!ready || leading || quitting) return;
+    if (!ready || leading || quitting || stopped) return;
     leading = true;
     registerShortcut();
     refresh();
@@ -325,7 +329,8 @@ module.exports = (ctx) => {
     log: ctx.log,
   });
 
-  import(pathToFileURL(path.join(ctx.dir, "model.mjs")).href).then(
+  // The query gets the current file after a reload: Node keeps ES modules it imported.
+  import(`${pathToFileURL(path.join(ctx.dir, "model.mjs")).href}?v=${Date.now()}`).then(
     (m) => {
       merge = m.mergeModels;
       refresh();
@@ -333,17 +338,19 @@ module.exports = (ctx) => {
     (e) => ctx.log("could not load model.mjs:", e.message),
   );
   app.whenReady().then(() => {
+    if (stopped) return;
     ready = true;
     if (hub.isLeader()) startLeading();
     const replace = () => {
       placeStrip();
       placePanel();
     };
-    screen.on("display-metrics-changed", replace);
-    screen.on("display-added", replace);
-    screen.on("display-removed", replace);
+    for (const event of ["display-metrics-changed", "display-added", "display-removed"]) listen(screen, event, replace);
   });
   hub.start();
+  // After a reload this hub has no model of this app yet: ask the app page to send it again.
+  // At app start the page is not up yet and sends it by itself.
+  renderer.republish().catch(() => {});
 
   return {
     // From renderer.js: the newest model of this app, or null when the mod stopped in the app page.
@@ -393,9 +400,10 @@ module.exports = (ctx) => {
       if (alive(strip)) strip.emit("moved");
       return true;
     },
-    // The loader does not call dispose on main mods yet (they stop with the app); kept so a
-    // future main reload has a clean exit.
+    // Before a reload and when the mod is turned off. The listeners go through ctx.lifecycle.
     dispose() {
+      stopped = true;
+      clearTimeout(reloadTimer);
       watcher.close();
       stopLeading();
       hub.close();

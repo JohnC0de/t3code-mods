@@ -1,6 +1,7 @@
 // App badge: marks a named app (ctx.app.name) in the window title ("T3 <name>") and, on
 // Windows, with a taskbar overlay badge: the first letter of the name on a colored disc.
-// The nameless default app is left alone. A change needs an app restart.
+// The nameless default app is left alone. On loader 0.4.0 or later a save here reloads it, and
+// turning the mod off takes the badge and the title away; older loaders need an app restart.
 "use strict";
 
 const os = require("node:os");
@@ -78,7 +79,10 @@ function discBitmap(color) {
 /** @type {import("../../loader/types/t3mods").MainEntry} */
 module.exports = (ctx) => {
   const name = appName(ctx);
-  if (!name) return;
+  if (!name) return () => {}; // nothing to undo; a cleanup still lets the loader reload it
+  // Listeners that go when the mod stops. An older loader has no lifecycle and never stops main.
+  const listen = ctx.lifecycle?.listen ?? ((emitter, event, fn) => emitter.on(event, fn));
+  let stopped = false;
   const { app, BrowserWindow, nativeImage } = ctx.electron;
   const label = `T3 ${name}`;
   const letter = Array.from(name)[0].toUpperCase();
@@ -107,16 +111,23 @@ module.exports = (ctx) => {
     const url = w.webContents.getURL();
     return /^t3code:/.test(url) && !url.includes("/__mods/");
   };
-  const retitle = (title) => (OWN_NAME.test(title) ? title.replace(OWN_NAME, label) : title.includes(label) ? title : `${title} — ${label}`);
+  // The app's own name in each title we changed, so the cleanup can put it back.
+  const ownNames = new Map();
+  const retitle = (title, w) => {
+    const own = title.match(OWN_NAME)?.[0];
+    if (own) ownNames.set(w, own);
+    return own ? title.replace(OWN_NAME, label) : title.includes(label) ? title : `${title} — ${label}`;
+  };
+  const untitle = (title, w) => (ownNames.has(w) ? title.replace(label, ownNames.get(w)) : title.replace(` — ${label}`, ""));
 
   let logged = false;
   const apply = (w) => {
-    if (!isMain(w)) return;
-    const title = retitle(w.getTitle());
+    if (!isMain(w) || stopped) return;
+    const title = retitle(w.getTitle(), w);
     if (title !== w.getTitle()) w.setTitle(title);
     if (!overlay) return;
     image(w).then((img) => {
-      if (w.isDestroyed()) return;
+      if (w.isDestroyed() || stopped) return;
       w.setOverlayIcon(img, label);
       if (!logged) ctx.log(`overlay badge set: ${label} ${letter} ${color}${custom ? " (T3MODS_APP_COLOR)" : ""}`);
       logged = true;
@@ -124,21 +135,33 @@ module.exports = (ctx) => {
   };
 
   const watch = (w) => {
-    w.on("page-title-updated", (e, title) => {
+    listen(w, "page-title-updated", (e, title) => {
       if (!isMain(w)) return;
       e.preventDefault();
-      w.setTitle(retitle(title));
+      w.setTitle(retitle(title, w));
     });
-    for (const ev of ["ready-to-show", "show", "restore", "focus"]) w.on(ev, () => apply(w));
-    for (const ev of ["did-finish-load", "did-navigate", "did-navigate-in-page"]) w.webContents.on(ev, () => apply(w));
+    for (const ev of ["ready-to-show", "show", "restore", "focus"]) listen(w, ev, () => apply(w));
+    for (const ev of ["did-finish-load", "did-navigate", "did-navigate-in-page"]) listen(w.webContents, ev, () => apply(w));
   };
 
   app.whenReady().then(() => {
-    app.on("browser-window-created", (_e, w) => watch(w));
+    if (stopped) return;
+    listen(app, "browser-window-created", (_e, w) => watch(w));
     for (const w of BrowserWindow.getAllWindows()) {
       watch(w);
       apply(w);
     }
     ctx.log(`app-badge active: ${label}`);
   });
+
+  // Before a reload and when the mod is turned off: the plain title and no badge again.
+  return () => {
+    stopped = true;
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!isMain(w)) continue;
+      const title = untitle(w.getTitle(), w);
+      if (title !== w.getTitle()) w.setTitle(title);
+      if (overlay) w.setOverlayIcon(null, "");
+    }
+  };
 };

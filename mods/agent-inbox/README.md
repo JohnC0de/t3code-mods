@@ -54,7 +54,9 @@ shortcut when the strip is off.
   `node loader/t3mods.mjs pack mods/agent-inbox`, then `node loader/t3mods.mjs add` the zip.
 - `hub.cjs` connects the apps through a named pipe (a unix socket outside Windows) that only
   your user account and mods folder map to. It has no network access.
-- `main.cjs` runs in the Electron main process, so changes to it need a T3 Code restart. The
-  strip and inbox pages reload on their own when you edit them.
+- `main.cjs` runs in the Electron main process. With loader 0.4.0 or later, a save of it (or
+  of `hub.cjs`, `place.cjs` or `model.mjs`) reloads it in every running app: the strip goes
+  away for a moment, and another app may then show it. Older loaders need a T3 Code restart.
+  The strip and inbox pages reload on their own when you edit them.
 - `preview.html` shows both pages with sample data (`mock-model.js`) in a normal browser, for
   design work. `CONTRACT.md` describes the data the pages get.

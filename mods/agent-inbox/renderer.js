@@ -75,7 +75,15 @@ export default (api) => {
   api.command({ id: "open", title: "Agent Inbox: open the inbox", searchTerms: ["inbox", "agents", "questions"], run: () => main.openInbox({}) });
   api.command({ id: "list", title: "Agent Inbox: show all agents", searchTerms: ["inbox", "agents"], run: () => main.openList() });
 
-  current = { api, dismissed, stripY };
+  current = {
+    api,
+    dismissed,
+    stripY,
+    republish: () => {
+      last = "";
+      publish();
+    },
+  };
   api.lifecycle.own(() => {
     clearTimeout(timer);
     clearInterval(tick);
@@ -85,6 +93,12 @@ export default (api) => {
     fetch("/__mods/rpc/main/agent-inbox/publish", { method: "POST", body: "[null]" }).catch(() => {});
   });
 };
+
+/** Called by main.cjs after it loaded again (hot reload): its hub has no model of this app yet. */
+export function republish() {
+  if (!current) throw new Error("Agent Inbox is not running in the app");
+  current.republish();
+}
 
 /** Called by main.cjs (ctx.renderer().setStripY) when the user drags the strip. */
 export function setStripY(y) {

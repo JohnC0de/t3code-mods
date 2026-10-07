@@ -12,25 +12,74 @@ const store = require("./store.cjs");
 const P = require("./patcher.cjs");
 const platform = require("./platform.cjs");
 
-const LOADER_VERSION = "0.3.0";
+const LOADER_VERSION = "0.4.0";
 const { MODS_DIR, META_DIR } = store;
 const LOG = (...a) => console.log("[t3mods]", ...a);
 const RUN_DIR = path.join(META_DIR, "run");
 const HEALTH_FILE = path.join(META_DIR, "health.json");
 const errText = (e) => String(e?.message ?? e);
 
+// ctx.lifecycle of a tier entry: cleanups that run when the mod stops, after its own cleanup,
+// newest first. Something owned after the stop (a late callback) is cleaned up at once.
+function makeLifecycle(id) {
+  const ctl = new AbortController();
+  const owned = [];
+  const own = (fn) => {
+    if (ctl.signal.aborted) fn();
+    else owned.push(fn);
+    return fn;
+  };
+  return {
+    api: {
+      signal: ctl.signal,
+      own,
+      listen(emitter, event, listener) {
+        const off = () => emitter.removeListener(event, listener);
+        if (ctl.signal.aborted) return off;
+        emitter.on(event, listener);
+        return own(off);
+      },
+    },
+    stop() {
+      ctl.abort();
+      for (const fn of owned.splice(0).reverse()) {
+        try {
+          fn();
+        } catch (e) {
+          console.error("[t3mods] cleanup failed:", id, e);
+        }
+      }
+    },
+  };
+}
+
 // A tier entry (server.cjs, main.cjs) exports `(ctx) => result`. The result is either a
 // cleanup function, or an object of methods that the renderer can call through
-// api.server() / api.main(); its optional `dispose` method is the cleanup.
-function startEntry(file, ctx) {
+// api.server() / api.main(); its optional `dispose` method is the cleanup. `reloadable`: the
+// entry gave a cleanup, so it can stop and load again (main.cjs hot-reloads only then).
+function startEntry(file, mod, extra = {}) {
+  const life = makeLifecycle(mod.id);
   const start = require(file);
-  const result = typeof start === "function" ? start(ctx) : undefined;
-  if (typeof result === "function") return { cleanup: result, methods: {} };
-  if (result && typeof result === "object") {
-    const { dispose, ...methods } = result;
-    return { cleanup: typeof dispose === "function" ? dispose.bind(result) : () => {}, methods };
+  let result;
+  try {
+    result = typeof start === "function" ? start({ ...tierContext(mod), lifecycle: life.api, ...extra }) : undefined;
+  } catch (e) {
+    life.stop();
+    throw e;
   }
-  return { cleanup: () => {}, methods: {} };
+  const { dispose, ...methods } = result && typeof result === "object" ? result : {};
+  const own = typeof result === "function" ? result : typeof dispose === "function" ? dispose.bind(result) : null;
+  return {
+    methods,
+    reloadable: Boolean(own),
+    cleanup() {
+      try {
+        own?.();
+      } finally {
+        life.stop();
+      }
+    },
+  };
 }
 
 // The backend inherits T3CODE_HOME and T3MODS_APP_NAME from main, so both tiers get one answer.
@@ -41,6 +90,21 @@ const tierContext = (mod) => ({
   log: (...a) => LOG(`[${mod.id}]`, ...a),
   state: () => store.readState(mod.id),
 });
+
+// The require.cache entries of the files under a mod folder: the entry and what it required.
+// Keys are real paths, so a linked mod folder is resolved first.
+const foldCase = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+const realDir = (dir) => {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return dir;
+  }
+};
+const cachedUnder = (dir) => {
+  const base = foldCase(realDir(dir) + path.sep);
+  return Object.keys(require.cache).filter((k) => foldCase(k).startsWith(base));
+};
 
 // Each main process writes its own health file; health.json is the last writer's copy, which
 // older main processes write alone and `t3mods list` reads.
@@ -63,10 +127,9 @@ function loadServerMods(rpc) {
     return new Map(store.listMods().filter((m) => m.enabled && m.files.server && health[m.id]?.status !== "degraded").map((m) => [m.id, m]));
   };
   const load = (mod) => {
-    const entry = path.join(mod.dir, "server.cjs");
     try {
-      delete require.cache[require.resolve(entry)];
-      active.set(mod.id, startEntry(entry, tierContext(mod)));
+      for (const k of cachedUnder(mod.dir)) delete require.cache[k];
+      active.set(mod.id, startEntry(path.join(mod.dir, "server.cjs"), mod));
       LOG("server mod loaded:", mod.id);
     } catch (e) {
       console.error("[t3mods] server mod failed:", mod.id, e);
@@ -236,7 +299,7 @@ function installMain() {
   let doctorReport = null;
   const patchStats = new Map();
   const pending = { reload: new Set(), restart: new Set() };
-  const mainMethods = new Map();
+  const mainActive = new Map(); // id -> the running main.cjs: { methods, cleanup, reloadable, dir }
 
   // The doctor reads every chunk (~100 ms), so this runs only when patches or mods change.
   function reloadPatches() {
@@ -333,7 +396,7 @@ function installMain() {
         status: h.status,
         problems: h.problems,
         files: m.files,
-        level: store.reloadLevel(m),
+        level: levelOf(m),
         base: `${m.builtin ? "_builtin/" : ""}${encodeURIComponent(m.id)}`,
         state: store.readState(m.id),
         source: sources[m.id] ?? null,
@@ -371,7 +434,7 @@ function installMain() {
       try {
         const args = JSON.parse((await request.text()) || "[]");
         if (tier === "main") {
-          const fn = mainMethods.get(id)?.[method];
+          const fn = mainActive.get(id)?.methods[method];
           if (typeof fn !== "function") throw new Error(`no main method ${id}.${method}`);
           return json({ ok: true, value: await fn(...args) });
         }
@@ -411,7 +474,7 @@ function installMain() {
     if (action === "install") {
       const name = request.headers.get("x-t3mods-filename") ?? "archive";
       const result = store.installArchive(await readBody(request, 50 * 1024 * 1024), `file:${name}`);
-      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id)) };
+      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id), true) };
     }
     if (action === "install-url") {
       const { url: target } = JSON.parse(await request.text());
@@ -423,7 +486,7 @@ function installMain() {
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length > 50 * 1024 * 1024) throw new Error("archive too large");
       const result = store.installArchive(buf, u.href);
-      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id)) };
+      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id), true) };
     }
     if (action === "registry-search") {
       const { q, sort, page } = JSON.parse((await request.text()) || "{}");
@@ -519,7 +582,7 @@ function installMain() {
         if ((added.length || p.info.yanked) && !(await confirmInstall(p, have, added))) throw new Error("install cancelled");
       }
       const result = registryClient().install(p);
-      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id)) };
+      return { installed: result, ...afterChange(store.listMods().find((m) => m.id === result.id), true) };
     });
   }
 
@@ -618,12 +681,69 @@ function installMain() {
     }
   }
 
-  // Applies a manager change. Main-tier code cannot be swapped, so it only marks a restart.
-  function afterChange(mod) {
-    const level = mod ? store.reloadLevel(mod) : "reload";
+  // Applies a manager change. `files`: an install or update replaced the files, so a running
+  // main.cjs loads again. A main.cjs that cannot stop (no cleanup) marks a restart.
+  function afterChange(mod, files = false) {
+    const level = mod ? levelOf(mod) : "reload";
     if (level === "restart") pending.restart.add(mod.id);
-    flush([`${mod?.id ?? "?"}/mod.json`]);
+    const id = mod?.id ?? "?";
+    flush(files && mod?.files.main ? [`${id}/mod.json`, `${id}/main.cjs`] : [`${id}/mod.json`]);
     return { level };
+  }
+
+  // How a change to a mod applies. main.cjs is live when the running copy can stop: it returned
+  // a cleanup. server-patches.cjs always needs a restart.
+  function levelOf(m) {
+    if (m.files.serverPatches || (m.files.main && mainActive.get(m.id)?.reloadable === false)) return "restart";
+    return m.files.patches ? "reload" : "hot";
+  }
+
+  // ---------- main tier: main.cjs in this process ----------
+  const wantedMain = () => new Map(mods.filter((m) => m.enabled && m.files.main && health.get(m.id)?.status !== "degraded").map((m) => [m.id, m]));
+  function startMain(mod) {
+    for (const k of cachedUnder(mod.dir)) delete require.cache[k];
+    try {
+      const run = startEntry(path.join(mod.dir, "main.cjs"), mod, { electron, renderer: () => rendererRemote(mod.id) });
+      mainActive.set(mod.id, { ...run, dir: mod.dir });
+      if (!mod.files.serverPatches) pending.restart.delete(mod.id);
+      LOG("main mod loaded:", mod.id, run.reloadable ? "" : "(no cleanup: a change needs a restart)");
+    } catch (e) {
+      console.error("[t3mods] main mod failed:", mod.id, e);
+    }
+  }
+  function stopMain(id) {
+    const run = mainActive.get(id);
+    mainActive.delete(id);
+    try {
+      run?.cleanup();
+    } catch (e) {
+      console.error("[t3mods] main mod cleanup failed:", id, e);
+    }
+  }
+  // reload: mods whose main code changed. touched: mods that may have been turned on or off,
+  // added or removed. A main.cjs without a cleanup keeps running and marks a restart.
+  function syncMain(reload, touched) {
+    const want = wantedMain();
+    for (const id of new Set([...reload, ...touched])) {
+      const run = mainActive.get(id);
+      const mod = want.get(id);
+      const again = reload.has(id);
+      if (run && !run.reloadable) {
+        if (again || !mod) pending.restart.add(id);
+        continue;
+      }
+      if (run && (again || !mod)) stopMain(id);
+      if (mod && (again || !run)) startMain(mod);
+    }
+  }
+  // A changed file reloads main.cjs when it is main.cjs, a file that main.cjs required, or an
+  // .mjs file (Node keeps ES modules, so main cannot tell which it imported).
+  function isMainCode(id, rel) {
+    if (rel === "main.cjs" || rel.endsWith(".mjs")) return true;
+    const run = mainActive.get(id);
+    if (!run) return false;
+    const file = foldCase(path.join(realDir(run.dir), rel));
+    return Object.keys(require.cache).some((k) => foldCase(k) === file);
   }
 
   function serveFile(url) {
@@ -696,8 +816,8 @@ function installMain() {
   }
 
   // Hot reload. CSS and renderer.js swap in place; patches.cjs and mod.json need a renderer
-  // reload (chunks are re-served through the patcher); main.cjs needs an app restart;
-  // server.cjs is reloaded by the backend's own watcher.
+  // reload (chunks are re-served through the patcher); main.cjs stops and loads again when it
+  // has a cleanup, else it needs an app restart; server.cjs is reloaded by the backend's own watcher.
   function flush(files, forceReload = false) {
     version = Date.now();
     // The index lists each mod's files, and a new or deleted renderer.js or style.css changes
@@ -705,7 +825,6 @@ function installMain() {
     // does not, so refresh the list on every change (cheap: no chunk reads).
     mods = store.listMods();
     const ids = new Set(files.map((f) => f.split("/")[0].replace(/^_/, "")));
-    for (const f of files) if (/main\.cjs$/.test(f)) pending.restart.add(f.split("/")[0]);
     // Edited patches of an enabled mod always need a reload. Other structural changes
     // (mod.json, a mod added, removed or toggled) need one only when they change which
     // patches apply: removing a mod whose patches never applied must not reload the page.
@@ -716,6 +835,16 @@ function installMain() {
       reloadPatches();
       if ([...activeKeys].join() !== before) needsReload = true;
     }
+    const mainReload = new Set();
+    const mainTouched = new Set();
+    for (const f of files) {
+      const [folder, ...rest] = f.split("/");
+      const id = folder.replace(/^_/, "");
+      const rel = rest.join("/");
+      if (!rel || rel === "mod.json") mainTouched.add(id);
+      else if (isMainCode(id, rel)) mainReload.add(id);
+    }
+    syncMain(mainReload, mainTouched);
     if (needsReload) {
       pending.reload.clear();
       reloadRenderers();
@@ -822,17 +951,8 @@ function installMain() {
     }
   });
 
-  // Main-process mods (Node + Electron APIs). Restart required on change.
-  for (const mod of mods) {
-    if (!mod.enabled || !mod.files.main || health.get(mod.id)?.status === "degraded") continue;
-    try {
-      const { methods } = startEntry(path.join(mod.dir, "main.cjs"), { ...tierContext(mod), electron, renderer: () => rendererRemote(mod.id) });
-      mainMethods.set(mod.id, methods);
-      LOG("main mod loaded:", mod.id);
-    } catch (e) {
-      console.error("[t3mods] main mod failed:", mod.id, e);
-    }
-  }
+  // Main-process mods (Node + Electron APIs). They load now, before the app is ready.
+  syncMain(new Set(), new Set(wantedMain().keys()));
 }
 
 // ---------- entry (last, so every const above is initialized) ----------

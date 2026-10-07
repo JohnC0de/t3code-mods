@@ -234,6 +234,25 @@ export type RendererEntry = (api: RendererApi) => void | (() => void) | Promise<
 
 // ---------- server.cjs / main.cjs ----------
 
+/** Something with Node's EventEmitter on/removeListener: `app`, `screen`, a BrowserWindow, `process`. */
+export interface Emitter {
+  on(event: string | symbol, listener: (...args: any[]) => void): unknown;
+  removeListener(event: string | symbol, listener: (...args: any[]) => void): unknown;
+}
+
+/**
+ * Cleanups that run when the mod stops (hot reload, turned off, uninstalled), after the
+ * entry's own cleanup or dispose, newest first. Loader 0.4.0 and later; older loaders have none.
+ */
+export interface TierLifecycle {
+  /** Aborted when the mod stops. */
+  readonly signal: AbortSignal;
+  /** Runs fn when the mod stops. Returns fn. After the stop it runs fn at once. */
+  own<F extends () => unknown>(fn: F): F;
+  /** emitter.on(event, listener) until the mod stops. Returns a function that removes it now. */
+  listen(emitter: Emitter, event: string | symbol, listener: (...args: any[]) => void): () => void;
+}
+
 export interface TierContext {
   readonly id: string;
   readonly dir: string;
@@ -242,6 +261,8 @@ export interface TierContext {
   log(...args: unknown[]): void;
   /** The mod's saved state, read from disk on each call (read-only here; the renderer writes it). */
   state(): Record<string, unknown>;
+  /** Missing on loaders older than 0.4.0. */
+  readonly lifecycle: TierLifecycle;
 }
 export interface MainContext extends TierContext {
   electron: typeof import("electron");
@@ -256,12 +277,15 @@ export interface MainContext extends TierContext {
 
 /**
  * Return a cleanup function, or an object of methods (+ optional dispose) for api.server().
- * The cleanup runs before a hot reload and when the mod is turned off.
+ * The cleanup, then ctx.lifecycle, runs before a hot reload and when the mod is turned off.
  */
 export type ServerEntry = (ctx: TierContext) => void | (() => void) | ({ dispose?(): void } & Record<string, (...args: any[]) => unknown>);
 /**
- * Like ServerEntry, for api.main(). Main code loads once at app start and stops with the app:
- * the loader never calls its cleanup or dispose, and a change needs a restart.
+ * Like ServerEntry, for api.main(). With a cleanup function or dispose, main.cjs hot-reloads:
+ * a save of it, of a file it required or of an .mjs file in the mod folder stops it and loads
+ * it again, and turning the mod off stops it. The cleanup must release what the mod made
+ * (windows, global shortcuts, timers, servers); listeners added with ctx.lifecycle.listen go by
+ * themselves. Without a cleanup, main.cjs loads once and a change needs a restart.
  */
 export type MainEntry = (ctx: MainContext) => void | (() => void) | ({ dispose?(): void } & Record<string, (...args: any[]) => unknown>);
 
