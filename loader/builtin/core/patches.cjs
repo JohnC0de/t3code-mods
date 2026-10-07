@@ -76,6 +76,23 @@ module.exports = [
       return text.replace(re(/SettingsArchivedRoute:\i,/), (m) => m + route);
     },
   },
+  {
+    // Thread state and thread commands for api.threads. The app keeps them in one atom
+    // registry: the thread shell store (a summary per thread, built on the thread command
+    // store's snapshot), the thread detail store (the full projection, loaded on demand) and
+    // the project store.
+    id: "threads",
+    optional: true,
+    find: "`web-environment-thread:empty`",
+    transform(text, { self }) {
+      const stores = text.match(re(/(\i)=\i\((\i)\.stateAtom\),(\i)=\i\(\{catalogValueAtom:\i\.catalogValueAtom,snapshotAtom:(\i)\.snapshotAtom\}\)/));
+      const registry = text.match(re(/function \i\(\)\{return (\i)\.get\(\i\.threadShellsAtom\)\}/));
+      const projects = text.match(re(/(\i)=\i\(\{catalogValueAtom:\i\.catalogValueAtom,snapshotAtom:\i\}\)/));
+      if (!stores || !registry || !projects) return text;
+      const internals = `{registry:${registry[1]},shells:${stores[3]},details:${stores[1]},projects:${projects[1]},commands:${stores[4]}}`;
+      return `${text}\n;${self}.provide?.("threads.internals",${internals});`;
+    },
+  },
   // App components for mods (api.ui.*). Optional: a mod that needs one declares it in requires.
   provideComponent("ui-button", '"data-slot":`button`', '"data-slot":`button`', "ui.Button"),
   provideComponent("ui-switch", '"data-slot":`switch`', '"data-slot":`switch`', "ui.Switch"),

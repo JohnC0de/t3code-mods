@@ -36,10 +36,17 @@ If the loader fails, the app starts without mods.
   timeline row, sidebar footer, settings page, UI components) and turns them into API
   calls such as `api.slot` and `api.command`. Third-party mods should use these, so that
   only core patches need fixes after an app update.
+- **Threads.** The core patch `threads` hands over the app's atom registry and its thread,
+  detail, project and command stores. The runtime turns them into `api.threads`: plain thread
+  objects, and commands that check a request is still open before they answer it
+  (`loader/threads-model.mjs` holds the pure part).
 - **Server and main.** `server.cjs` runs in the backend, `main.cjs` in the Electron main
   process. `api.server()` and `api.main()` send calls to `/__mods/rpc/` on the app origin.
   The main process runs `main.cjs` calls itself and forwards `server.cjs` calls to the
-  backend over a local HTTP port that needs a per-run token.
+  backend over a local HTTP port that needs a per-run token. `ctx.renderer()` goes the other
+  way: main runs `__t3mods.callRenderer` in the app page, which calls the mod's renderer
+  exports. Pages that a mod opens from its folder (`/__mods/<id>/*.html`) count as mod
+  windows, not app windows: no runtime, no hot update, no install dialogs.
 
 ## Server patches
 

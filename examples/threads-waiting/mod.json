@@ -1,0 +1,7 @@
+{
+  "id": "threads-waiting",
+  "name": "Threads waiting",
+  "version": "1.0.0",
+  "description": "Example: api.threads in a sidebar button that counts threads waiting for you.",
+  "requires": ["core/threads", "core/sidebar-footer"]
+}

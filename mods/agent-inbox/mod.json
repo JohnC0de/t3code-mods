@@ -1,0 +1,10 @@
+{
+  "id": "agent-inbox",
+  "name": "Agent Inbox",
+  "version": "0.1.0",
+  "description": "A status strip at the screen edge and a keyboard inbox for agent questions, approvals and finished work.",
+  "requires": ["core/threads"],
+  "tags": ["agents", "inbox", "ui"],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

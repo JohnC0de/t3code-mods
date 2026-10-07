@@ -33,7 +33,7 @@ setTimeout(() => {
   process.exit(1);
 }, 180_000).unref();
 const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(10_000) })).json();
-const page = targets.find((t) => t.type === "page" && t.url.startsWith("t3code://app"));
+const page = targets.find((t) => t.type === "page" && t.url.startsWith("t3code://app") && !t.url.includes("/__mods/"));
 if (!page) throw new Error(`no T3 Code page on CDP port ${port}`);
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 let seq = 0;
@@ -149,8 +149,27 @@ await step("Patch Helper finds the palette anchor", async () => {
   assert(r.ok && r.results.length === 1, JSON.stringify(r));
 });
 
+await step("api.threads lists threads, and callRenderer reaches a mod's renderer exports", async () => {
+  await installZip([
+    ["mod.json", JSON.stringify({ id: "e2e-threads", requires: ["core/threads"] })],
+    ["renderer.js", "let api; export default (a) => { api = a; }; export const probe = async (n) => { await api.threads.ready(); const list = api.threads.list(); return { n: n * 2, available: api.threads.available(), isArray: Array.isArray(list), keysOk: list.every((t) => t.key === t.ref.environmentId + '/' + t.ref.threadId) }; };"],
+  ]);
+  // An install can arrive as two watcher batches; the second reloads the mod, so wait for an answer.
+  const out = await until("probe answers", "window.__t3mods?.callRenderer('e2e-threads', 'probe', [21]).then((o) => o.ok && o)", 15000);
+  assert(out.ok && out.value.n === 42 && out.value.available && out.value.isArray && out.value.keysOk, JSON.stringify(out));
+  const missing = await evaluate("window.__t3mods.callRenderer('e2e-threads', 'nope', [])");
+  assert(!missing.ok && /no renderer export/.test(missing.error), JSON.stringify(missing));
+});
+
+await step("the loader serves a mod's .html page as HTML", async () => {
+  const dir = path.join(modsDir, "e2e-threads");
+  fs.writeFileSync(path.join(dir, "page.html"), "<!doctype html><title>e2e</title>");
+  const type = await evaluate("fetch('/__mods/e2e-threads/page.html').then(r=>r.headers.get('content-type'))");
+  assert(/^text\/html/.test(type), type);
+});
+
 await step("uninstall removes the test mods", async () => {
-  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent"]) {
+  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent", "e2e-threads"]) {
     const r = await api("uninstall", { id });
     assert(r.ok, `${id}: ${r.error}`);
   }
@@ -250,7 +269,7 @@ if (registryUrl) {
     assert(/sha256 [0-9a-f]{16}/.test(o.detail) && o.detail.includes(new URL(registryUrl).host), o.detail);
     await until("installed", "fetch('/__mods/index.json').then(r=>r.json()).then(i=>i.mods.some(m=>m.id==='e2e-reg-server'&&m.source?.registry))", 15000);
     await until("asked the router for the Mods page", "window.__e2eNav.includes('/settings/mods')");
-    const pages = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).filter((t) => t.type === "page" && t.url.startsWith("t3code://app"));
+    const pages = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).filter((t) => t.type === "page" && t.url.startsWith("t3code://app") && !t.url.includes("/__mods/"));
     assert(pages.length === 1, `${pages.length} app windows`);
   });
 

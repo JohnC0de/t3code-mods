@@ -65,12 +65,43 @@ Main parts of the API (full list in `loader/types/t3mods.d.ts`):
 | `api.css(text)`, `api.observe(selector, fn)` | Style and DOM work with automatic cleanup |
 | `api.lifecycle.signal / own / listen` | Abort signal and cleanup for your own resources |
 | `api.server()` / `api.main()` | Call the methods that `server.cjs` / `main.cjs` return |
+| `api.threads` | The app's threads, their questions and approvals, and commands to answer them |
 | `api.ui.Button / Switch / SidebarIconButton` | The app's own components |
 | `api.unsafe.get(key)` | App internals that a patch provides; no stable contract |
 
 `import` from `react`, `react-dom`, `react-dom/client` and `react/jsx-runtime` works without a
 bundler. For TSX, build with `bun build --watch` and mark React as external; see
 `examples/tsx-demo` and the `build:tsx-demo` script.
+
+## Threads
+
+`api.threads` reads the app's threads and answers them. It comes from the core patch
+`core/threads`, so add `"requires": ["core/threads"]` to `mod.json`.
+
+```js
+api.threads.subscribe((threads) => {
+  const waiting = threads.filter((t) => !t.archived && (t.status === "input" || t.status === "approval"));
+  api.log(`${waiting.length} threads need you`);
+});
+
+// Questions and approvals load per thread, as when the user opens it.
+api.threads.watch(ref, async ({ questions, approvals, lastMessage }) => {
+  const q = questions[0];
+  if (q) await api.threads.answer(ref, q.requestId, { [q.questions[0].id]: q.questions[0].options[0].value });
+});
+```
+
+| Method | Does |
+|---|---|
+| `list()`, `subscribe(fn)`, `useList()` | Every thread: title, project, `status` (`working`, `waiting`, `approval`, `input`, `failed`, `limited`, `ready`), `unread`, ... |
+| `watch(ref, fn)` | Open questions, open approvals and the last message of one thread |
+| `answer(ref, requestId, answers)` | Answers a question; `answers[questionId]` is an option `value`, typed text, or an array for multi-select |
+| `approve(ref, requestId, decision)` | Answers an approval with one of its options (`accept`, `acceptForSession`, `decline`, ...) |
+| `send(ref, text)`, `stop(ref)` | A new message (a busy thread queues or steers it), or an interrupt |
+| `markSeen(ref)`, `open(ref)` | Marks a thread as seen, or shows it in the app |
+
+`answer` and `approve` check first that the request is still open and that the answer fits
+it, and reject otherwise. `mods/agent-inbox` is a full example.
 
 ## server.cjs and main.cjs
 
@@ -83,6 +114,25 @@ cleanup.
 module.exports = (ctx) => ({
   info: (n) => ({ n, pid: process.pid, mod: ctx.id }),
 });
+```
+
+In `main.cjs`, `ctx.renderer()` calls the other way: the named exports of the mod's
+`renderer.js` in the app window, for example after a global shortcut. `ctx.electron` can open
+windows of your own. A window can load a page from the mod folder,
+`t3code://app/__mods/<id>/page.html`. Such a page gets no mod API and no app code; it calls
+`main.cjs` with `fetch("/__mods/rpc/main/<id>/<method>", { method: "POST", body: JSON.stringify(args) })`.
+Close your windows when the app's last window closes (`browser-window-created`, then
+`closed`), or the app keeps running without a window.
+
+```js
+/** @type {import("../../t3mods/types/t3mods").MainEntry} */
+module.exports = (ctx) => {
+  ctx.electron.app.whenReady().then(() => {
+    ctx.electron.globalShortcut.register("Control+Alt+K", () => ctx.renderer().ping("from main"));
+  });
+};
+// renderer.js
+export const ping = (from) => console.log("ping", from);
 ```
 
 ## patches.cjs

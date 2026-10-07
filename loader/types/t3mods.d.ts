@@ -70,6 +70,105 @@ export interface PaletteCommand {
   run(): unknown;
 }
 
+// ---------- api.threads (core patch "threads") ----------
+
+export interface ThreadRef {
+  environmentId: string;
+  threadId: string;
+}
+
+/** The app's own sidebar status. "waiting": the session is open but idle. */
+export type ThreadStatus = "working" | "waiting" | "approval" | "input" | "failed" | "limited" | "ready";
+
+export interface ThreadInfo {
+  /** `${environmentId}/${threadId}`: stable and unique, for maps and DOM keys. */
+  key: string;
+  ref: ThreadRef;
+  title: string;
+  projectId: string;
+  /** The project's title; null for an unknown project. */
+  project: string | null;
+  status: ThreadStatus;
+  /** Finished after the user last opened it (false for a thread never opened, as in the app). */
+  unread: boolean;
+  subagent: boolean;
+  parentThreadId: string | null;
+  archived: boolean;
+  settled: boolean;
+  snoozedUntil: string | null;
+  pinned: boolean;
+  branch: string | null;
+  /** Status of the latest run ("running", "completed", "failed", ...), null before the first run. */
+  runStatus: string | null;
+  runId: string | null;
+  completedAt: string | null;
+  lastVisitedAt: string | null;
+  updatedAt: string;
+  /** The runtime's last error, e.g. after a failed run. */
+  error: string | null;
+  errorClass: string | null;
+  provider: string | null;
+  model: string | null;
+  runtimeMode: string | null;
+  interactionMode: string | null;
+}
+
+export interface ThreadQuestion {
+  id: string;
+  header: string;
+  question: string;
+  multiSelect: boolean;
+  /** A typed answer is allowed besides the options. */
+  allowCustom: boolean;
+  /** `value` is what answer() takes (the label when the agent gave no value). */
+  options: { label: string; description: string; value: string }[];
+}
+
+export interface ThreadDetail {
+  /** Open user-input requests; each holds one or more questions answered together. */
+  questions: { requestId: string; createdAt: string; questions: ThreadQuestion[] }[];
+  /** Open approval requests (commands, file changes, tool access). */
+  approvals: {
+    requestId: string;
+    /** "command", "file-change", "file-read", "mcp-elicitation", ... */
+    kind: string;
+    detail: string | null;
+    appName: string | null;
+    createdAt: string;
+    /** `decision` is what approve() takes: "accept", "acceptForSession", "decline", ... */
+    options: { decision: string; label: string; warning: string | null }[];
+  }[];
+  /** The agent's last message (Markdown), or null. */
+  lastMessage: string | null;
+}
+
+/** The app's threads and thread commands. Needs the core/threads patch: add it to `requires`. */
+export interface ThreadsApi {
+  /** false until the app's thread stores loaded, or when this build lacks the patch. */
+  available(): boolean;
+  ready(): Promise<void>;
+  /** Every thread (subagents and archived ones included), newest first. Throws when not available. */
+  list(): ThreadInfo[];
+  /** Calls fn with the list now and on each change. Owned by the mod; returns an early unsubscribe. */
+  subscribe(fn: (threads: ThreadInfo[]) => void): () => void;
+  /** React hook: the list; re-renders on change. */
+  useList(): ThreadInfo[];
+  /** Loads one thread like the app does when it is opened, and calls fn on each change. Owned. */
+  watch(ref: ThreadRef, fn: (detail: ThreadDetail) => void): () => void;
+  /** Rejects when the request is no longer open or an answer is missing or not an option. */
+  answer(ref: ThreadRef, requestId: string, answers: Record<string, string | string[]>): Promise<void>;
+  /** Rejects when the request is no longer open or the decision is not one of its options. */
+  approve(ref: ThreadRef, requestId: string, decision: string): Promise<void>;
+  /** A new message; a busy thread queues or steers it, as the composer does. */
+  send(ref: ThreadRef, text: string): Promise<void>;
+  /** Interrupts the running turn. */
+  stop(ref: ThreadRef): Promise<void>;
+  /** Marks the thread as seen now, so it is no longer unread. */
+  markSeen(ref: ThreadRef): Promise<void>;
+  /** Shows the thread in the app window. */
+  open(ref: ThreadRef): void;
+}
+
 export interface RendererApi {
   readonly id: string;
   log(...args: unknown[]): void;
@@ -102,6 +201,8 @@ export interface RendererApi {
   server<T = Record<string, (...args: any[]) => unknown>>(): Remote<T>;
   /** Calls methods that this mod's main.cjs returns (main changes need a restart). */
   main<T = Record<string, (...args: any[]) => unknown>>(): Remote<T>;
+  /** The app's threads: status, questions, approvals, and commands to answer them. */
+  threads: ThreadsApi;
   navigate(to: string): void;
   /** App internals with no stable contract. They can change in any T3 Code build. */
   unsafe: {
@@ -129,6 +230,13 @@ export interface TierContext {
 }
 export interface MainContext extends TierContext {
   electron: typeof import("electron");
+  /**
+   * Calls named exports of this mod's renderer.js in the app window. Arguments and results
+   * cross as JSON-like values; a call rejects when the app window or the mod is not loaded.
+   * Pages that main.cjs opens from the mod folder (t3code://app/__mods/<id>/page.html) get no
+   * mod API: they call main through fetch("/__mods/rpc/main/<id>/<method>").
+   */
+  renderer<T = Record<string, (...args: any[]) => unknown>>(): Remote<T>;
 }
 
 /** Return a cleanup function, or an object of methods (+ optional dispose) for api.server(). */

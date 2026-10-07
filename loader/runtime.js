@@ -3,7 +3,9 @@
 // Everything a mod registers goes through `api` and is owned by the mod's lifecycle, so a
 // hot reload is dispose-then-import. Types: types/t3mods.d.ts.
 
-const log = (...a) => console.log("%c[t3mods]", "color:#818cf8", ...a);
+import * as threadsModel from "./threads-model.mjs";
+
+const log =(...a) => console.log("%c[t3mods]", "color:#818cf8", ...a);
 const loaded = new Map(); // id -> { disposers, controller }
 
 // ---------- small observable ----------
@@ -199,8 +201,146 @@ function remote(tier, id, signal) {
   );
 }
 
+// ---------- api.threads: the app's threads and thread commands (core patch "threads") ----------
+// The patch hands over the app's atom registry and its thread stores; this turns them into plain
+// objects and promise-returning commands.
+const internals = () => provided.get("threads.internals");
+function needInternals() {
+  const t = internals();
+  if (!t) throw new Error("api.threads needs the core/threads patch, which does not apply to this T3 Code build");
+  return t;
+}
+const plainRef = (ref) => ({ environmentId: ref.environmentId, threadId: ref.threadId });
+const listThreads = () => {
+  const t = needInternals();
+  return threadsModel.toThreadList(t.registry.get(t.shells.threadShellsAtom), t.registry.get(t.projects.projectsAtom));
+};
+// Runs start(internals) once the patch has provided them; the result is the unsubscribe, safe
+// to call more than once (a mod may stop a watch early, and unload stops it again).
+function whenInternals(start) {
+  let stop = null;
+  let cancelled = false;
+  get("threads.internals").then((t) => {
+    if (!cancelled) stop = start(t);
+  });
+  return () => {
+    if (cancelled) return;
+    cancelled = true;
+    stop?.();
+  };
+}
+function watchThreadList(fn) {
+  return whenInternals((t) => {
+    let queued = false;
+    const emit = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        fn(listThreads());
+      });
+    };
+    const offs = [t.registry.subscribe(t.shells.threadShellsAtom, emit), t.registry.subscribe(t.projects.projectsAtom, emit)];
+    emit();
+    return () => offs.forEach((off) => off());
+  });
+}
+// One shared list for React components (useSyncExternalStore needs a stable snapshot).
+const threadList = { value: [], subs: new Set(), stop: null };
+function subscribeThreadList(fn) {
+  threadList.subs.add(fn);
+  threadList.stop ??= watchThreadList((list) => {
+    threadList.value = list;
+    for (const sub of [...threadList.subs]) sub();
+  });
+  return () => {
+    threadList.subs.delete(fn);
+    if (threadList.subs.size === 0) {
+      threadList.stop?.();
+      threadList.stop = null;
+    }
+  };
+}
+// Questions, approvals and the last message of one thread. Mounting the detail atoms makes the
+// app load the thread from the backend, as when the user opens it.
+function watchThread(ref, fn) {
+  return whenInternals((t) => {
+    const projection = t.details.threadAtom(plainRef(ref));
+    const pending = t.details.pendingRequestsAtom(plainRef(ref));
+    const emit = () => {
+      const p = t.registry.get(projection)?.projection;
+      if (p) fn({ ...threadsModel.toPending(t.registry.get(pending)), lastMessage: threadsModel.lastAssistantMessage(p) });
+    };
+    const offs = [t.registry.subscribe(projection, emit), t.registry.subscribe(pending, emit)];
+    emit();
+    return () => offs.forEach((off) => off());
+  });
+}
+// The open requests right now, loading the thread first when it is not loaded (at most 5 s).
+async function pendingNow(ref) {
+  const t = needInternals();
+  const projection = t.details.threadAtom(plainRef(ref));
+  const pending = t.details.pendingRequestsAtom(plainRef(ref));
+  const offs = [t.registry.subscribe(projection, () => {}), t.registry.subscribe(pending, () => {})];
+  try {
+    for (let i = 0; i < 50 && !t.registry.get(projection); i++) await new Promise((r) => setTimeout(r, 100));
+    if (!t.registry.get(projection)) throw new Error("the thread did not load");
+    return threadsModel.toPending(t.registry.get(pending));
+  } finally {
+    offs.forEach((off) => off());
+  }
+}
+async function runThreadCommand(name, ref, input) {
+  const t = needInternals();
+  const result = await t.commands[name].run(t.registry, { environmentId: ref.environmentId, input: { threadId: ref.threadId, ...input } });
+  if (result?._tag === "Failure") throw new Error(threadsModel.failureText(result));
+}
+const threadsApi = (own) => ({
+  available: () => Boolean(internals()),
+  ready: () => get("threads.internals").then(() => undefined),
+  list: listThreads,
+  subscribe: (fn) => own(watchThreadList(fn)),
+  useList: () => React().useSyncExternalStore(subscribeThreadList, () => threadList.value),
+  watch: (ref, fn) => own(watchThread(ref, fn)),
+  async answer(ref, requestId, answers) {
+    const request = (await pendingNow(ref)).questions.find((q) => q.requestId === requestId);
+    if (!request) throw new Error("This question was already answered, or it changed");
+    await runThreadCommand("respondToUserInput", ref, { requestId, answers: threadsModel.checkAnswers(request.questions, answers) });
+  },
+  async approve(ref, requestId, decision) {
+    const request = (await pendingNow(ref)).approvals.find((a) => a.requestId === requestId);
+    if (!request) throw new Error("This approval was already answered, or it changed");
+    if (!request.options.some((o) => o.decision === decision)) throw new Error(`"${decision}" is not a choice for this approval`);
+    await runThreadCommand("respondToApproval", ref, { requestId, decision });
+  },
+  async send(ref, text) {
+    if (typeof text !== "string" || !text.trim()) throw new Error("the message is empty");
+    const thread = listThreads().find((x) => x.ref.environmentId === ref.environmentId && x.ref.threadId === ref.threadId);
+    if (!thread) throw new Error("no such thread");
+    // dispatchMode "auto" (the default): a busy thread queues or steers, as the app's composer does.
+    const message = { messageId: crypto.randomUUID(), role: "user", text, attachments: [] };
+    await runThreadCommand("startTurn", ref, { message, runtimeMode: thread.runtimeMode, interactionMode: thread.interactionMode, createdAt: new Date().toISOString() });
+  },
+  stop: (ref) => runThreadCommand("interruptTurn", ref, {}),
+  markSeen: (ref) => runThreadCommand("visit", ref, { visitedAt: new Date().toISOString() }),
+  open(ref) {
+    window.__TSR_ROUTER__?.navigate({ to: "/$environmentId/$threadId", params: plainRef(ref) });
+  },
+});
+
 // Renderer exports of each mod; patches reach them as `$self`.
 const exportsById = Object.create(null);
+
+// main.cjs calls named exports of its mod's renderer.js through ctx.renderer().
+async function callRenderer(id, method, args) {
+  try {
+    const fn = exportsById[id]?.[method];
+    if (typeof fn !== "function") throw new Error(`no renderer export ${id}.${method}`);
+    return { ok: true, value: await fn(...args) };
+  } catch (e) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
 
 const warned = new Set();
 function makeApi(mod, entry) {
@@ -287,6 +427,7 @@ function makeApi(mod, entry) {
     },
     server: () => remote("server", id, entry.controller.signal),
     main: () => remote("main", id, entry.controller.signal),
+    threads: threadsApi(own),
     navigate: (to) => window.__TSR_ROUTER__?.navigate({ to }),
     // App internals without a stable contract: values provided by patches, and $self targets.
     unsafe: { get, provide, peek: (key) => provided.get(key), exports: exportsById },
@@ -399,6 +540,7 @@ window.__t3mods = {
   render,
   paletteItems,
   refreshIndex,
+  callRenderer,
   lastHotUpdate: null,
   // Older mod patches render `__t3mods.Slot` directly.
   get Slot() {

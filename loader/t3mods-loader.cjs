@@ -512,7 +512,8 @@ function installMain() {
   };
 
   const showBox = async (options) => {
-    const parent = electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0];
+    const focused = electron.BrowserWindow.getFocusedWindow();
+    const parent = focused && appContents().includes(focused.webContents) ? focused : appWindow();
     const answer = testMode && process.env.T3MODS_TEST_CONFIRM;
     // Test mode only (T3MODS_LOADER is set by `t3mods dev`, never in a normal start): record the
     // dialog instead of showing it, so a test can check what the user would have seen.
@@ -586,7 +587,7 @@ function installMain() {
     const out = await installFromRegistry(spec, prepared);
     LOG("installed from link:", spec.id, info.version, out.level);
     for (const wc of appContents()) wc.executeJavaScript('window.__TSR_ROUTER__?.navigate({ to: "/settings/mods" })').catch(() => {});
-    const win = electron.BrowserWindow.getAllWindows()[0];
+    const win = appWindow();
     if (win) {
       if (win.isMinimized()) win.restore();
       win.show();
@@ -610,7 +611,23 @@ function installMain() {
     else if (rel.startsWith("_builtin/")) [base, sub] = [store.BUILTIN_DIR, rel.slice("_builtin/".length)];
     const file = path.resolve(base, sub);
     if (!file.startsWith(path.resolve(base) + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return new Response(null, { status: 404 });
-    const type = { ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" }[path.extname(file)] ?? "application/octet-stream";
+    // .html: pages that a main.cjs opens in its own windows (served without the runtime).
+    const type =
+      {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript",
+        ".mjs": "text/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".wav": "audio/wav",
+        ".mp3": "audio/mpeg",
+        ".woff2": "font/woff2",
+      }[path.extname(file).toLowerCase()] ?? "application/octet-stream";
     return new Response(fs.readFileSync(file), { headers: { "content-type": type, "cache-control": "no-store" } });
   }
 
@@ -622,7 +639,34 @@ function installMain() {
     return new Response(text, { status: res.status, headers });
   }
 
-  const appContents = () => electron.webContents.getAllWebContents().filter((wc) => wc.getURL().startsWith("t3code"));
+  // The app's own pages. Pages that mods open from their folder (t3code://app/__mods/...) are
+  // not: they get no runtime, no hot update and no install dialogs.
+  const appContents = () =>
+    electron.webContents.getAllWebContents().filter((wc) => {
+      const url = wc.getURL();
+      return url.startsWith("t3code") && !/^t3code[\w-]*:\/\/[^/]+\/__mods\//.test(url);
+    });
+  const appWindow = () => electron.BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && appContents().includes(w.webContents)) ?? null;
+
+  // ctx.renderer() of a main.cjs: calls named exports of the mod's renderer.js in the app page.
+  // Arguments and results cross as JSON-like values.
+  const rendererRemote = (id) =>
+    new Proxy(
+      {},
+      {
+        get(_, method) {
+          if (typeof method !== "string" || method === "then") return undefined;
+          return async (...args) => {
+            const wc = appContents()[0];
+            if (!wc) throw new Error(`${id}.${method} (renderer): the app window is not open`);
+            const call = `(window.__t3mods?.callRenderer ?? (async () => ({ ok: false, error: "mods have not loaded in the app page yet" })))(${JSON.stringify(id)}, ${JSON.stringify(method)}, ${JSON.stringify(args)})`;
+            const out = await wc.executeJavaScript(call);
+            if (!out?.ok) throw new Error(`${id}.${method} (renderer): ${out?.error ?? "no answer"}`);
+            return out.value;
+          };
+        },
+      },
+    );
   function reloadRenderers() {
     // Chunks keep their hashed names across patch edits, so drop the HTTP cache first.
     for (const wc of appContents()) wc.session.clearCache().then(() => wc.reloadIgnoringCache());
@@ -716,7 +760,7 @@ function installMain() {
         const f = file?.replace(/\\/g, "/");
         if (!f) return;
         if (f.startsWith("builtin/")) devQueued.add(f.slice("builtin/".length));
-        else if (/^(runtime\.js|shims\/)/.test(f)) runtimeChanged = true;
+        else if (/^(runtime\.js|threads-model\.mjs|shims\/)/.test(f)) runtimeChanged = true;
         else if (f.endsWith(".cjs")) return void LOG(`${f} changed; restart T3 Code to load it`);
         else return;
         clearTimeout(devTimer);
@@ -734,7 +778,7 @@ function installMain() {
   for (const mod of mods) {
     if (!mod.enabled || !mod.files.main || health.get(mod.id)?.status === "degraded") continue;
     try {
-      const { methods } = startEntry(path.join(mod.dir, "main.cjs"), { ...tierContext(mod), electron });
+      const { methods } = startEntry(path.join(mod.dir, "main.cjs"), { ...tierContext(mod), electron, renderer: () => rendererRemote(mod.id) });
       mainMethods.set(mod.id, methods);
       LOG("main mod loaded:", mod.id);
     } catch (e) {

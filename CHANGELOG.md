@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Threads API:** `api.threads` lists the app's threads with their status, and reads and
+  answers their questions and approvals (`answer`, `approve`, `send`, `stop`, `markSeen`,
+  `open`). It comes from the new core patch `core/threads`. Example: `examples/threads-waiting`.
+- **Main to renderer:** `ctx.renderer()` in `main.cjs` calls the named exports of the mod's
+  `renderer.js` in the app window.
+- **Mod pages:** the loader serves `.html` (and common image, audio and font files) from a mod
+  folder, so `main.cjs` can open its own windows on `t3code://app/__mods/<id>/page.html`. Such
+  windows never count as the app window for reloads, hot updates or install dialogs.
+- New mod `agent-inbox`: a status strip at the screen edge and a keyboard inbox
+  (Ctrl+Alt+Space) for agent questions, approvals and finished work.
+
 ## 0.3.0 (2026-10-07)
 
 - **Registry:** browse, install, review and publish mods at https://t3mods.jonn.cc.

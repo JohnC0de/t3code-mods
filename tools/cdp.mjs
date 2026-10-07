@@ -6,7 +6,7 @@ import fs from "node:fs";
 const [cmd, arg] = process.argv.slice(2);
 const port = process.env.CDP_PORT ?? "9333";
 const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-const page = targets.find((t) => t.type === "page" && t.url.startsWith("t3code://app"));
+const page = targets.find((t) => t.type === "page" && t.url.startsWith("t3code://app") && !t.url.includes("/__mods/"));
 if (!page) throw new Error(`no T3 Code page on CDP port ${port}`);
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 const fail = (msg) => {

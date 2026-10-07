@@ -58,7 +58,7 @@ const kitHome = platform.kitHome();
 const isWin = process.platform === "win32";
 const isLinux = process.platform === "linux";
 // Everything the kit holds: the loader and its files, the CLI and the helper scripts.
-const KIT = ["t3mods-loader.cjs", "patcher.cjs", "store.cjs", "zip.cjs", "platform.cjs", "runtime.js", "shims", "builtin", "types", "t3mods.mjs", "shim-index.cjs", "post-update.ps1", "post-update.cmd", "server-patches.cjs", "asar.cjs", "registry.cjs", "linux"];
+const KIT = ["t3mods-loader.cjs", "patcher.cjs", "store.cjs", "zip.cjs", "platform.cjs", "runtime.js", "threads-model.mjs", "shims", "builtin", "types", "t3mods.mjs", "shim-index.cjs", "post-update.ps1", "post-update.cmd", "server-patches.cjs", "asar.cjs", "registry.cjs", "linux"];
 
 const args = process.argv.slice(2);
 const cmd = args[0] ?? "help";

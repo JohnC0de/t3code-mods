@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Inbox preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #222; color: #ddd; display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+  #desk { position: relative; overflow: hidden; background: linear-gradient(135deg, #2b3a55, #6b4a7a 60%, #c07a5a); }
+  #desk.light { background: linear-gradient(135deg, #e9eef7, #f6efe6 60%, #fff); }
+  iframe { position: absolute; border: 0; background: transparent; }
+  #strip { right: 0; top: 60px; width: 56px; height: 300px; }
+  #panel { right: 70px; top: 20px; width: 440px; height: 560px; }
+  #panel.peek { width: 320px; height: 140px; }
+  #side { padding: 10px; display: flex; flex-direction: column; gap: 8px; border-left: 1px solid #444; min-height: 0; }
+  #bar { display: flex; flex-wrap: wrap; gap: 4px; }
+  button { font: inherit; padding: 4px 8px; border: 1px solid #555; border-radius: 6px; background: #333; color: #eee; cursor: pointer; }
+  button:hover { background: #444; }
+  #log { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 6px; background: #111; border-radius: 6px; font: 11px/1.35 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+  #log .t { color: #7b7f87; }
+  #log .m { color: #5aa0ff; }
+  #log .e { color: #ef6461; }
+</style>
+</head>
+<body>
+<div id="desk">
+  <iframe id="panel" name="panel" title="panel"></iframe>
+  <iframe id="strip" name="strip" title="strip"></iframe>
+</div>
+<aside id="side">
+  <div id="bar">
+    <button data-do="inbox">Inbox</button>
+    <button data-do="approval">Inbox at approval</button>
+    <button data-do="list">List</button>
+    <button data-do="peek1">Peek question</button>
+    <button data-do="peek6">Peek done</button>
+    <button data-do="empty">Empty model</button>
+    <button data-do="update">Model update</button>
+    <button data-do="multi">Multi-question card</button>
+    <button data-do="reset">Reset</button>
+    <button data-do="wall">Light/dark wallpaper</button>
+    <button data-do="clearlog">Clear log</button>
+  </div>
+  <div>Replies on the "Release notes" thread are rejected on purpose (error path). Everything else succeeds after 300 ms.</div>
+  <pre id="log" aria-label="RPC log"></pre>
+</aside>
+<script type="module">
+import { mockModel } from "./mock-model.js";
+
+const $ = (id) => document.getElementById(id);
+const strip = $("strip"), panel = $("panel"), desk = $("desk"), logEl = $("log");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// ?undo=8000 stretches the undo window, handy for screenshots.
+const undoOverride = Number(new URLSearchParams(location.search).get("undo"));
+if (undoOverride) mockModel.undoMs = undoOverride;
+let model = structuredClone(mockModel);
+let panelHidden = false;
+
+function log(who, method, args, cls = "m") {
+  const line = document.createElement("div");
+  const t = document.createElement("span"); t.className = "t"; t.textContent = new Date().toLocaleTimeString() + " ";
+  const m = document.createElement("span"); m.className = cls; m.textContent = `${who} ${method} `;
+  line.append(t, m, JSON.stringify(args)?.slice(0, 300) ?? "");
+  logEl.append(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const push = () => {
+  strip.contentWindow.inbox?.update(structuredClone(model));
+  panel.contentWindow.inbox?.update(structuredClone(model));
+};
+const showPanel = (view) => {
+  panelHidden = false;
+  panel.style.visibility = "visible";
+  panel.classList.toggle("peek", view.mode === "peek");
+  panel.contentWindow.inbox?.show(view);
+  if (view.mode !== "peek") panel.contentWindow.focus();
+};
+const hidePanel = () => { panelHidden = true; panel.style.visibility = "hidden"; };
+
+function recount() {
+  const c = model.cards;
+  model.counts.attention = c.filter((x) => x.kind === "question" || x.kind === "approval").length;
+  model.counts.done = c.filter((x) => x.kind === "done").length;
+}
+
+// Same contract as the real transport: (method, args array, frame name).
+window.__inboxRpc = async (method, args, who) => {
+  const a = args[0];
+  log(who, method, args);
+  switch (method) {
+    case "state": return structuredClone(model);
+    case "act": {
+      await sleep(300);
+      if (a.type === "reply" && a.ref.threadId === "t7") {
+        log("main", "act rejected", a, "e");
+        throw new Error("The thread is busy. Try again in a moment.");
+      }
+      if (a.type === "open") { hidePanel(); return; }
+      const key = a.cardKey;
+      model.cards = model.cards.filter((c) => (key ? c.key !== key : c.ref.threadId !== a.ref.threadId));
+      recount();
+      setTimeout(push, 100);
+      return;
+    }
+    case "openInbox": {
+      const card = a.cardKey ? model.cards.find((c) => c.key === a.cardKey) : model.cards.find((c) => c.threadKey === a.threadKey);
+      showPanel({ mode: "inbox", cardKey: card?.key ?? null });
+      return;
+    }
+    case "openList": showPanel({ mode: "list" }); return;
+    case "peek": {
+      const rect = desk.getBoundingClientRect();
+      panel.style.top = Math.max(8, a.y - window.screenY - rect.top - 60) + "px";
+      showPanel({ mode: "peek", threadKey: a.threadKey });
+      return;
+    }
+    case "unpeek": if (panel.classList.contains("peek")) hidePanel(); return;
+    case "closePanel": hidePanel(); return;
+    case "fit": strip.style.width = a.width + "px"; strip.style.height = a.height + "px"; return;
+    case "dragEnd": return;
+    default: throw new Error(`unknown method ${method}`);
+  }
+};
+
+const multiCard = () => ({
+  key: "multi|q|req-m", kind: "question", threadKey: "env-local\u0000t1", ref: { environmentId: "env-local", threadId: "t1" },
+  title: "Two-step setup", project: "web", status: "input", at: Date.now() - 90_000,
+  message: "Two quick questions before I scaffold the project.", canReply: true, requestId: "req-m",
+  questions: [
+    { id: "lang", header: "Language", question: "Which language?", multiSelect: false, allowCustom: false,
+      options: [{ label: "TypeScript", description: "Typed", value: "ts" }, { label: "JavaScript", description: "Plain", value: "js" }] },
+    { id: "extras", header: "Extras", question: "Which extras do you want?", multiSelect: true, allowCustom: true,
+      options: [{ label: "Linting", description: "oxlint", value: "lint" }, { label: "Tests", description: "bun test", value: "test" }, { label: "CI", description: "Local hooks only", value: "ci" }] },
+  ],
+});
+
+const actions = {
+  inbox: () => showPanel({ mode: "inbox", cardKey: null }),
+  approval: () => showPanel({ mode: "inbox", cardKey: model.cards.find((c) => c.kind === "approval")?.key ?? null }),
+  list: () => showPanel({ mode: "list" }),
+  peek1: () => { panel.style.top = "70px"; showPanel({ mode: "peek", threadKey: mockModel.dots[0].threadKey }); },
+  peek6: () => { panel.style.top = "200px"; showPanel({ mode: "peek", threadKey: mockModel.dots[5].threadKey }); },
+  empty: () => { model = { ...structuredClone(mockModel), cards: [], dots: [], counts: { attention: 0, working: 0, done: 0 } }; push(); },
+  update: () => {
+    // A new card goes first and the clock moves: the panel must stay on the current card.
+    const m = structuredClone(mockModel);
+    m.at = Date.now();
+    m.cards.unshift({ ...structuredClone(mockModel.cards[2]), key: "new|done|1", title: "Fresh result", at: Date.now() });
+    m.counts.done += 1;
+    model = m; push();
+  },
+  multi: () => { model.cards.unshift(multiCard()); recount(); push(); showPanel({ mode: "inbox", cardKey: "multi|q|req-m" }); },
+  reset: () => { model = structuredClone(mockModel); push(); showPanel({ mode: "inbox", cardKey: null }); },
+  wall: () => desk.classList.toggle("light"),
+  clearlog: () => (logEl.textContent = ""),
+};
+document.getElementById("bar").addEventListener("click", (e) => {
+  const k = e.target.closest("button")?.dataset.do;
+  if (k) actions[k]();
+});
+window.preview = { actions, get model() { return model; } };
+
+strip.src = "strip.html?preview";
+panel.src = "panel.html?preview";
+</script>
+</body>
+</html>
