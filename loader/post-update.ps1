@@ -67,6 +67,17 @@ function Check {
   'ready'
 }
 
+# electron-builder keeps the install folder in <HKCU or HKLM>\Software\<app guid>\InstallLocation.
+function InstalledExe($name) {
+  foreach ($root in 'HKCU:\Software', 'HKLM:\Software') {
+    foreach ($key in Get-ChildItem $root -ErrorAction SilentlyContinue) {
+      $dir = (Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).InstallLocation
+      if ($dir -and (Test-Path -LiteralPath (Join-Path $dir $name))) { return (Join-Path $dir $name) }
+    }
+  }
+  $null
+}
+
 Log "started (installer=$($request.installer), relaunch=$($request.relaunch))"
 if ($request.installer) {
   # The app starts the installer and quits; the installer then replaces the app folder. Wait
@@ -85,6 +96,14 @@ if ($request.installer) {
   while (InstallerRunning) {
     if ((Get-Date) -gt $deadline) { Log 'gave up: the installer still runs after 30 minutes'; exit 1 }
     Start-Sleep -Seconds 1
+  }
+  # The installer writes to the app's registered folder, not to the folder of the exe that
+  # started the update: an update started from a copy of the app updates the installed app.
+  $installed = InstalledExe (Split-Path $request.exe -Leaf)
+  if ($installed -and $installed -ne $request.exe) {
+    Log "the installer updated $(Split-Path $installed), not $(Split-Path $request.exe); installing there"
+    $request.exe = $installed
+    $res = Join-Path (Split-Path $installed) 'resources'
   }
 }
 

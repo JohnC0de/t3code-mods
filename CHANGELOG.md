@@ -15,6 +15,10 @@
   - New mod `app-badge`: a named app gets "T3 <name>" in its window title and, on Windows, a
     letter badge on its taskbar button.
   - `agent-instructions` 1.1.0: `instructions.<name>.md` adds notes for one app only.
+- **Windows update from a copy of the app:** the installer updates the app's registered install
+  folder, not the copy that started the update. The post-update task now finds that folder
+  (`InstallLocation` in the registry), installs the loader there and starts that app. Before,
+  it installed into the copy, and the updated app ran without mods.
 - **Threads API:** `api.threads` lists the app's threads with their status, and reads and
   answers their questions and approvals (`answer`, `approve`, `send`, `stop`, `markSeen`,
   `open`). It comes from the new core patch `core/threads`. Example: `examples/threads-waiting`.

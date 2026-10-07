@@ -35,18 +35,25 @@ function pickColor(name, env) {
   return { color: PALETTE[h % PALETTE.length], custom: false, bad: set || undefined };
 }
 
-const escapeXml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.codePointAt(0)};`);
+// Runs in the app page: the disc and the letter on a canvas, as a PNG data URL (2x for sharp edges).
+const badgeScript = (letter, color) => `(() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = ${SIZE * 2};
+  const g = c.getContext("2d");
+  g.scale(2, 2);
+  g.fillStyle = ${JSON.stringify(color)};
+  g.beginPath();
+  g.arc(16, 16, 15, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#fff";
+  g.font = "700 21px 'Segoe UI', Arial, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(${JSON.stringify(letter)}, 16, 17);
+  return c.toDataURL("image/png");
+})()`;
 
-function badgeSvg(letter, color) {
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">` +
-    `<circle cx="16" cy="16" r="15" fill="${color}"/>` +
-    `<text x="16" y="16" text-anchor="middle" dominant-baseline="central" fill="#fff" ` +
-    `font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="21">${escapeXml(letter)}</text></svg>`
-  );
-}
-
-// A plain disc in a BGRA bitmap, for when the SVG cannot be rendered. 4x supersampled edge.
+// A plain disc in a BGRA bitmap, for when the letter cannot be drawn. 4x supersampled edge.
 function discBitmap(color) {
   const hex = color.slice(1);
   const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
@@ -79,38 +86,18 @@ module.exports = (ctx) => {
   if (bad) ctx.log(`T3MODS_APP_COLOR "${bad}" is not a CSS hex color (#rgb or #rrggbb); using the palette`);
   const overlay = process.platform === "win32";
 
-  // The letter is drawn as SVG in a hidden window and captured: the system's fonts give any
-  // letter or digit. Rendered once.
-  async function render() {
-    const w = new BrowserWindow({
-      show: false,
-      x: -32000,
-      y: -32000,
-      width: SIZE,
-      height: SIZE,
-      transparent: true,
-      frame: false,
-      skipTaskbar: true,
-      webPreferences: { sandbox: true, contextIsolation: true },
-    });
-    try {
-      const html = `<!doctype html><body style="margin:0;background:transparent;overflow:hidden">${badgeSvg(letter, color)}`;
-      await w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-      w.showInactive(); // a hidden window cannot be captured; this one sits far off screen
-      for (let i = 0; i < 10; i++) {
-        const shot = await w.webContents.capturePage({ x: 0, y: 0, width: SIZE, height: SIZE });
-        if (!shot.isEmpty()) return shot.resize({ width: SIZE, height: SIZE });
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      throw new Error("empty capture");
-    } finally {
-      w.destroy();
-    }
+  // The letter is drawn on a canvas in the app page, so the system's fonts give any letter or
+  // digit. (A capture of a hidden window fails on some setups with UnknownVizError.) Drawn once.
+  async function render(w) {
+    if (w.webContents.isLoading()) await new Promise((r) => w.webContents.once("did-finish-load", r));
+    const img = nativeImage.createFromDataURL(await w.webContents.executeJavaScript(badgeScript(letter, color)));
+    if (img.isEmpty()) throw new Error("empty image");
+    return img.resize({ width: SIZE, height: SIZE, quality: "best" });
   }
 
   let badge = null; // a Promise of the image, started on first use
-  const image = () =>
-    (badge ??= render().catch((e) => {
+  const image = (w) =>
+    (badge ??= render(w).catch((e) => {
       ctx.log("badge letter not rendered, using a plain disc:", e.message);
       return nativeImage.createFromBitmap(discBitmap(color), { width: SIZE, height: SIZE });
     }));
@@ -128,7 +115,7 @@ module.exports = (ctx) => {
     const title = retitle(w.getTitle());
     if (title !== w.getTitle()) w.setTitle(title);
     if (!overlay) return;
-    image().then((img) => {
+    image(w).then((img) => {
       if (w.isDestroyed()) return;
       w.setOverlayIcon(img, label);
       if (!logged) ctx.log(`overlay badge set: ${label} ${letter} ${color}${custom ? " (T3MODS_APP_COLOR)" : ""}`);
