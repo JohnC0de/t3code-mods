@@ -12,14 +12,21 @@ const { buildAsar, rawFs } = require("./helpers/asar.cjs");
 const cli = path.join(__dirname, "..", "loader", "t3mods.mjs");
 const skip = process.platform !== "win32" && "Windows install layout";
 
+const temps = [];
+test.after(() => {
+  for (const d of temps) fs.rmSync(d, { recursive: true, force: true });
+});
+
 function fakeApp() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3mods-app-"));
+  temps.push(dir);
   const res = path.join(dir, "resources");
   fs.mkdirSync(path.join(res, "app.asar.unpacked", "native"), { recursive: true });
   fs.writeFileSync(path.join(res, "app.asar.unpacked", "native", "keyring.node"), "native");
   fs.writeFileSync(path.join(res, "app.asar"), "original bundle");
   fs.writeFileSync(path.join(dir, "T3 Code (Nightly).exe"), "");
   const kit = fs.mkdtempSync(path.join(os.tmpdir(), "t3mods-kit-"));
+  temps.push(kit);
   // T3MODS_POST_UPDATE: no scheduled task for a test kit.
   const run = (cmd) =>
     spawnSync(process.execPath, [cli, cmd, "--app", dir], { encoding: "utf8", env: { ...process.env, T3MODS_HOME: kit, T3MODS_POST_UPDATE: "1" } });
