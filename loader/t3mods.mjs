@@ -557,6 +557,7 @@ function dev() {
     const home = path.join(root, "home");
     // Electron keeps its profile in APPDATA (Windows) or XDG_CONFIG_HOME (Linux).
     Object.assign(env, { APPDATA: path.join(root, "appdata"), XDG_CONFIG_HOME: path.join(root, "config"), T3CODE_HOME: home, T3CODE_DISABLE_AUTO_UPDATE: "1" });
+    env.T3MODS_APP_NAME ||= "Dev"; // so a test instance is easy to tell from the user's apps
     if (flag("--copy-data")) copyUserData(path.join(os.homedir(), ".t3", "userdata"), path.join(home, "userdata"));
     console.log(`isolated profile: ${root}`);
   } else if (running(dir)) {

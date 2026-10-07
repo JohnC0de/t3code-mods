@@ -90,13 +90,27 @@ function setEnabled(id, enabled) {
   return mod;
 }
 
-const stateFile = (id) => path.join(META_DIR, "state", `${id}.json`);
+const STATE_DIR = path.join(META_DIR, "state");
+const stateFile = (id) => path.join(STATE_DIR, `${id}.json`);
 const readState = (id) => readJson(stateFile(id), {});
 function writeState(id, value) {
   if (!ID_RE.test(id)) throw new Error("bad mod id");
   const text = JSON.stringify(value);
   if (text.length > 256 * 1024) throw new Error("state too large (256 KB max)");
   writeJson(stateFile(id), value);
+}
+// Changes some keys of the saved state and keeps the others, so two apps that share the mods
+// folder do not overwrite each other. The write is atomic, but read-apply-write is not a lock:
+// two apps that patch within the same few milliseconds can still lose one patch. Returns the
+// new state.
+function patchState(id, { set = {}, unset = [] } = {}) {
+  if (!set || typeof set !== "object" || Array.isArray(set) || !Array.isArray(unset) || !unset.every((k) => typeof k === "string")) {
+    throw new Error("a state patch is { set: { key: value }, unset: [key] }");
+  }
+  const next = { ...readState(id), ...set };
+  for (const key of unset) delete next[key];
+  writeState(id, next);
+  return next;
 }
 
 function safeName(name) {
@@ -213,8 +227,10 @@ module.exports = {
   reloadLevel,
   readConfig,
   setEnabled,
+  STATE_DIR,
   readState,
   writeState,
+  patchState,
   inspectArchive,
   archiveTiers,
   installArchive,

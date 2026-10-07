@@ -91,6 +91,23 @@ test("state round trip and size limit", () => {
   assert.throws(() => store.writeState("demo2", { big: "x".repeat(300 * 1024) }), /too large/);
 });
 
+test("state patches change their keys only, so two apps do not overwrite each other", () => {
+  store.writeState("shared", { a: 1, b: 2, gone: true });
+  // App A and app B each patch a different key, from the state that they read earlier.
+  store.patchState("shared", { set: { a: 10 } });
+  store.patchState("shared", { set: { c: { deep: [1] } }, unset: ["gone"] });
+  assert.deepEqual(store.readState("shared"), { a: 10, b: 2, c: { deep: [1] } });
+  assert.deepEqual(store.patchState("fresh", { set: { x: 1 } }), { x: 1 }, "a patch creates the file");
+  assert.deepEqual(store.patchState("fresh", { unset: ["nope"] }), { x: 1 });
+  // The limit applies to the result, and a refused patch leaves the file as it was.
+  assert.throws(() => store.patchState("shared", { set: { big: "x".repeat(300 * 1024) } }), /too large/);
+  assert.equal(store.readState("shared").big, undefined);
+  assert.throws(() => store.patchState("../x", { set: { a: 1 } }), /bad mod id/);
+  assert.throws(() => store.patchState("shared", { set: [1], unset: [] }), /state patch/);
+  assert.throws(() => store.patchState("shared", { unset: "a" }), /state patch/);
+  assert.equal(fs.readdirSync(store.STATE_DIR).some((n) => n.endsWith(".tmp")), false);
+});
+
 test("an archive cannot hide a tier file in another case or a doubled name", () => {
   assert.throws(() => store.inspectArchive(writeZip([manifest("sneaky"), file("style.css", ""), file("MAIN.CJS", "")])), /wrong case/);
   assert.throws(() => store.inspectArchive(writeZip([manifest("sneaky"), file("renderer.js", "a"), file("RENDERER.JS", "b")])), /differ only in case/);

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Several apps at once:** apps with their own `T3CODE_HOME` can share one mods folder.
+  `ctx.app` (main and server tiers) and `api.app` (renderer) give `{ id, name, home }`;
+  `T3MODS_APP_NAME` sets the name, and `t3mods dev --isolated` sets it to `Dev`.
+  - Each main process writes `.t3mods/run/health-<pid>.json`, and its backend follows that file
+    instead of the shared `health.json`, so apps no longer overwrite each other's health.
+  - Mod state saves per key (`POST /__mods/api/state-patch/<id>`, `store.patchState`), so one
+    app no longer overwrites another's keys. A change in one app reaches the cells of the others
+    live. A runtime on an older main process falls back to the old whole-object save.
+  - `agent-inbox` 0.2.0: all running apps share one strip, one shortcut and one merged inbox.
+    The first app to start shows them; when it quits, another app takes over.
+  - New mod `app-badge`: a named app gets "T3 <name>" in its window title and, on Windows, a
+    letter badge on its taskbar button.
+  - `agent-instructions` 1.1.0: `instructions.<name>.md` adds notes for one app only.
 - **Threads API:** `api.threads` lists the app's threads with their status, and reads and
   answers their questions and approvals (`answer`, `approve`, `send`, `stop`, `markSeen`,
   `open`). It comes from the new core patch `core/threads`. Example: `examples/threads-waiting`.

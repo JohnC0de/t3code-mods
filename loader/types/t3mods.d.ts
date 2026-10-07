@@ -24,12 +24,13 @@ export interface Cell<T> {
   readonly key: string;
   get(): T;
   set(next: T | ((current: T) => T)): void;
-  /** Owned by the mod: removed on unload. Returns an early unsubscribe. */
+  /** Owned by the mod: removed on unload. Returns an early unsubscribe. Also called when another app changes the value. */
   subscribe(fn: (value: T) => void): () => void;
-  /** Runs now and on each change; a returned function cleans up the previous run. */
+  /** Runs now and on each change, also one from another app; a returned function cleans up the previous run. */
   effect(fn: (value: T) => void | (() => void)): () => void;
 }
 
+/** Saved per mod in the mods folder, so all apps that share it see the same values. A save writes only the keys that changed. */
 export interface StateApi {
   boolean(key: string, fallback: boolean): Cell<boolean>;
   number(key: string, fallback: number, range?: { min?: number; max?: number }): Cell<number>;
@@ -169,8 +170,20 @@ export interface ThreadsApi {
   open(ref: ThreadRef): void;
 }
 
+/** Which T3 Code app this is. Several apps can run at once, each with its own data folder, and share one mods folder. */
+export interface AppInfo {
+  /** "default" for the app that uses ~/.t3; otherwise a short stable hash of its data folder. */
+  id: string;
+  /** Display name: T3MODS_APP_NAME when set; null for the default app; else from the data folder name (".t3-work" -> "Work"). */
+  name: string | null;
+  /** The app's data folder: T3CODE_HOME, or ~/.t3. */
+  home: string;
+}
+
 export interface RendererApi {
   readonly id: string;
+  /** This app. Mod state is shared by all apps; threads are not. An older main process gives { id: "default", name: null, home: "" }. */
+  readonly app: AppInfo;
   log(...args: unknown[]): void;
   lifecycle: Lifecycle;
   state: StateApi;
@@ -224,8 +237,10 @@ export type RendererEntry = (api: RendererApi) => void | (() => void) | Promise<
 export interface TierContext {
   readonly id: string;
   readonly dir: string;
+  /** The app that runs this tier (the backend of one app, or its main process). */
+  readonly app: AppInfo;
   log(...args: unknown[]): void;
-  /** The mod's saved state (read-only here; the renderer writes it). */
+  /** The mod's saved state, read from disk on each call (read-only here; the renderer writes it). */
   state(): Record<string, unknown>;
 }
 export interface MainContext extends TierContext {

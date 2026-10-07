@@ -4,6 +4,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const crypto = require("node:crypto");
 
 // The kit: a per-user copy of the loader, CLI and helper scripts. The shim in the app folder
 // loads the loader from here, so loader updates never need to touch the app folder (which
@@ -51,4 +52,20 @@ function cleanEnv(env) {
   return out;
 }
 
-module.exports = { kitHome, dataHome, clientAssetsDir, LINUX_SYSTEM_DIRS, APPIMAGE_NAME, appImageVersion, classifyUpdaterSpawn, cleanEnv };
+// Which T3 Code app this is. Several apps can run at once, each with its own data folder
+// (T3CODE_HOME), and share one mods folder. The default app uses ~/.t3. Pure, so the main
+// process and the backend (which inherits T3CODE_HOME and T3MODS_APP_NAME) get the same answer.
+function appInfo(env, homedir, platform = process.platform) {
+  const fold = (p) => (platform === "win32" ? p.toLowerCase() : p);
+  const home = env.T3CODE_HOME ? path.resolve(env.T3CODE_HOME) : path.join(homedir, ".t3");
+  const isDefault = fold(home) === fold(path.join(homedir, ".t3"));
+  const id = isDefault ? "default" : crypto.createHash("sha1").update(fold(home)).digest("hex").slice(0, 8);
+  // ".t3-work" -> "Work", "t3code-dev" -> "Dev"; a folder that is only the prefix keeps its name.
+  const base = path.basename(home).replace(/^\.+/, "");
+  const word = base.replace(/^t3(code)?-/i, "") || base;
+  const derived = word ? word[0].toUpperCase() + word.slice(1) : null;
+  const named = env.T3MODS_APP_NAME?.trim();
+  return { id, name: named || (isDefault ? null : derived), home };
+}
+
+module.exports = { kitHome, dataHome, clientAssetsDir, LINUX_SYSTEM_DIRS, APPIMAGE_NAME, appImageVersion, classifyUpdaterSpawn, cleanEnv, appInfo };

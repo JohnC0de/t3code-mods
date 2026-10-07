@@ -115,20 +115,62 @@ async function apiCall(action, body, headers = {}) {
 }
 
 // ---------- state cells, persisted per mod in <mods>/.t3mods/state/<id>.json ----------
-const stores = new Map(); // id -> { values, subs: Map<key, Set>, timer }
+// Several apps share these files. A save sends only the keys that this page changed, and
+// stateChanged() takes in what other apps wrote.
+const stores = new Map(); // id -> { values, subs: Map<key, Set<{ fn, read }>>, timer, dirty: Set<key>, flight: Set<key> }
 function storeFor(id) {
-  if (!stores.has(id)) stores.set(id, { values: { ...(index?.mods.find((m) => m.id === id)?.state ?? {}) }, subs: new Map(), timer: 0 });
+  if (!stores.has(id)) stores.set(id, { values: { ...(index?.mods.find((m) => m.id === id)?.state ?? {}) }, subs: new Map(), timer: 0, dirty: new Set(), flight: new Set() });
   return stores.get(id);
+}
+// An older main process has no per-key endpoint and answers "unknown action": use the old
+// whole-object one from then on.
+let wholeStateOnly = false;
+async function saveState(id, s) {
+  const keys = [...s.dirty];
+  s.dirty.clear();
+  for (const k of keys) s.flight.add(k);
+  try {
+    let out;
+    if (wholeStateOnly) out = await apiCall(`state/${encodeURIComponent(id)}`, s.values);
+    else {
+      const set = Object.fromEntries(keys.filter((k) => s.values[k] !== undefined).map((k) => [k, s.values[k]]));
+      const unset = keys.filter((k) => s.values[k] === undefined);
+      try {
+        out = await apiCall(`state-patch/${encodeURIComponent(id)}`, { set, unset });
+      } catch (e) {
+        if (!/^unknown action/.test(e.message)) throw e;
+        wholeStateOnly = true;
+        out = await apiCall(`state/${encodeURIComponent(id)}`, s.values);
+      }
+    }
+    if (out.reload) await refreshIndex();
+  } catch (e) {
+    for (const k of keys) s.dirty.add(k); // the next save retries them
+    console.error(`[t3mods] ${id}: could not save state`, e);
+  } finally {
+    for (const k of keys) s.flight.delete(k);
+  }
+}
+// The main process calls this when a state file changed on disk (another app wrote it, or this
+// page's own save came back). Keys with a local write that is not saved yet keep the local value.
+function stateChanged(id, values) {
+  const mod = index?.mods.find((m) => m.id === id);
+  if (mod) mod.state = values;
+  const s = stores.get(id);
+  if (!s) return;
+  for (const key of new Set([...Object.keys(s.values), ...Object.keys(values)])) {
+    if (s.dirty.has(key) || s.flight.has(key) || JSON.stringify(s.values[key]) === JSON.stringify(values[key])) continue;
+    if (values[key] === undefined) delete s.values[key];
+    else s.values[key] = values[key];
+    for (const { fn, read } of [...(s.subs.get(key) ?? [])]) fn(read());
+  }
 }
 function makeState(id, own) {
   const s = storeFor(id);
-  const save = () => {
+  const save = (key) => {
+    s.dirty.add(key);
     clearTimeout(s.timer);
-    s.timer = setTimeout(() => {
-      apiCall(`state/${encodeURIComponent(id)}`, s.values)
-        .then((r) => r.reload && refreshIndex())
-        .catch((e) => console.error(`[t3mods] ${id}: could not save state`, e));
-    }, 150);
+    s.timer = setTimeout(() => saveState(id, s), 150);
   };
   const cell = (key, fallback, decode) => {
     const read = () => {
@@ -137,7 +179,11 @@ function makeState(id, own) {
       return d === undefined ? fallback : d;
     };
     const listeners = () => s.subs.get(key) ?? s.subs.set(key, new Set()).get(key);
-    const subscribeRaw = (fn) => (listeners().add(fn), () => listeners().delete(fn));
+    const subscribeRaw = (fn) => {
+      const entry = { fn, read }; // read: stateChanged() decodes with this cell's own decoder
+      listeners().add(entry);
+      return () => listeners().delete(entry);
+    };
     return {
       key,
       get: read,
@@ -146,8 +192,8 @@ function makeState(id, own) {
         if (d === undefined) throw new TypeError(`${id}: invalid value for state "${key}"`);
         if (s.values[key] !== undefined && Object.is(d, read())) return;
         s.values[key] = d;
-        save();
-        for (const fn of [...listeners()]) fn(d);
+        save(key);
+        for (const { fn } of [...listeners()]) fn(d);
       },
       subscribe: (fn) => own(subscribeRaw(fn)),
       // Runs now with the current value and again on each change; a returned function is
@@ -370,6 +416,8 @@ function makeApi(mod, entry) {
   };
   const api = {
     id,
+    // An older main process serves no app info (a kit is refreshed under a running app).
+    app: index?.app ?? { id: "default", name: null, home: "" },
     log: (...a) => log(`[${id}]`, ...a),
     lifecycle,
     state: makeState(id, own),
@@ -541,6 +589,7 @@ window.__t3mods = {
   paletteItems,
   refreshIndex,
   callRenderer,
+  stateChanged,
   lastHotUpdate: null,
   // Older mod patches render `__t3mods.Slot` directly.
   get Slot() {

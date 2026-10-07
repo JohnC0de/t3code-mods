@@ -48,6 +48,30 @@ If the loader fails, the app starts without mods.
   exports. Pages that a mod opens from its folder (`/__mods/<id>/*.html`) count as mod
   windows, not app windows: no runtime, no hot update, no install dialogs.
 
+## Several apps
+
+Apps with different `T3CODE_HOME` folders can share one mods folder, so everything under
+`<mods>/.t3mods/` has to cope with more than one writer.
+
+- **App identity.** `platform.appInfo(env, homedir)` gives `{ id, name, home }`: `"default"`
+  for `~/.t3`, otherwise a hash of the data folder. Main puts it in `index.json` and in
+  `ctx.app`. The backend computes it from the env that it inherits from main.
+- **Health.** Main writes `run/health-<mainPid>.json` and `health.json` (the last writer's
+  copy, for `t3mods list` and older backends). A backend reads and watches the file of its
+  own main process, and falls back to `health.json` when that file is missing. Main removes
+  its file on quit, like `run/server-<pid>.json`.
+- **State sync.** `state/<id>.json` has no owner. The runtime tracks the keys that the page
+  changed and saves them with `state-patch/<id>`; `store.patchState` reads the file, applies
+  the keys and writes it atomically. A page that talks to an older main process gets
+  "unknown action" and falls back to the whole-object `state/<id>` call. Main also watches
+  `state/` (the mods watcher skips dot paths), debounces, reads the changed file and calls
+  `__t3mods.stateChanged(id, values)` in the app pages. The runtime updates each key whose
+  value differs and that has no unsaved or in-flight local write, and notifies that cell's
+  subscribers. A page's own save comes back through the watcher with equal values, so it
+  changes nothing. Two patches within a few milliseconds can still lose one: the
+  read-apply-write is not a lock. A change from another app does not re-evaluate patch
+  predicates; that waits for the next reload.
+
 ## Server patches
 
 `server-patches.cjs` patches the backend's chunks. In the backend, the loader runs a doctor

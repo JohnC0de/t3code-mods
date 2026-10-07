@@ -168,8 +168,52 @@ await step("the loader serves a mod's .html page as HTML", async () => {
   assert(/^text\/html/.test(type), type);
 });
 
+await step("app identity: api.app matches the index, and main wrote its own health file", async () => {
+  const idx = await evaluate("fetch('/__mods/index.json').then(r=>r.json())");
+  assert(idx.app && typeof idx.app.id === "string" && idx.app.home, `no app in the index: ${JSON.stringify(idx.app)}`);
+  console.log(`     app ${JSON.stringify(idx.app)}`);
+  const runDir = path.join(modsDir, ".t3mods", "run");
+  const health = fs.existsSync(runDir) ? fs.readdirSync(runDir).filter((n) => /^health-\d+\.json$/.test(n)) : [];
+  assert(health.length >= 1, "no run/health-<pid>.json");
+});
+
+await step("mod state: a write from another app reaches the cell, and a page write changes only its own keys", async () => {
+  await installZip([
+    ["mod.json", JSON.stringify({ id: "e2e-state" })],
+    [
+      "renderer.js",
+      "export default (api) => { const a = api.state.string('a', 'none'); const b = api.state.string('b', 'none'); const w = (window.__e2eState = { app: api.app, a, b, seenA: [], seenB: [] }); a.subscribe((v) => w.seenA.push(v)); b.subscribe((v) => w.seenB.push(v)); };",
+    ],
+  ]);
+  await until("state mod loaded", `${loaded("e2e-state")} && !!window.__e2eState`, 15000);
+  const idx = await evaluate("fetch('/__mods/index.json').then(r=>r.json())");
+  assert((await evaluate("JSON.stringify(window.__e2eState.app)")) === JSON.stringify(idx.app), "api.app differs from the index");
+  const file = path.join(modsDir, ".t3mods", "state", "e2e-state.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Another app writes key a.
+  fs.writeFileSync(file, JSON.stringify({ a: "from-outside" }));
+  await until("cell a follows the file", "window.__e2eState.a.get()==='from-outside' && window.__e2eState.seenA.join()==='from-outside'");
+  // Another app writes key "other" and, at once, the page sets b. The page must not overwrite "other" or "a".
+  fs.writeFileSync(file, JSON.stringify({ a: "from-outside", other: "kept" }));
+  await evaluate("window.__e2eState.b.set('from-page')");
+  const end = Date.now() + 8000;
+  let saved = {};
+  while (saved.b !== "from-page" && Date.now() < end) {
+    await sleep(100);
+    saved = JSON.parse(fs.readFileSync(file, "utf8"));
+  }
+  assert(saved.b === "from-page" && saved.a === "from-outside" && saved.other === "kept", `state file: ${JSON.stringify(saved)}`);
+  // The page's own save comes back through the watcher and must not notify again.
+  await sleep(800);
+  const seen = await evaluate("JSON.stringify([window.__e2eState.seenA, window.__e2eState.seenB])");
+  assert(seen === JSON.stringify([["from-outside"], ["from-page"]]), `cell notifications: ${seen}`);
+  // Another app removes a key: the cell goes back to its default.
+  fs.writeFileSync(file, JSON.stringify({ a: "from-outside", other: "kept" }));
+  await until("cell b unset", "window.__e2eState.b.get()==='none'");
+});
+
 await step("uninstall removes the test mods", async () => {
-  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent", "e2e-threads"]) {
+  for (const id of ["e2e-css", "e2e-broken", "e2e-dependent", "e2e-threads", "e2e-state"]) {
     const r = await api("uninstall", { id });
     assert(r.ok, `${id}: ${r.error}`);
   }

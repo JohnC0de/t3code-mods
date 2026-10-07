@@ -203,6 +203,27 @@ update; without the loader, run `server-patch` again after each update.
 `server-patch --undo` puts the original file back. `t3mods doctor` checks both kinds of patch; a patch already written into
 `server.asar` shows as `baked`.
 
+## Several apps
+
+You can run more than one T3 Code app at once, each with its own data folder
+(`T3CODE_HOME`, for example a work app next to your personal one). They share one mods
+folder. `ctx.app` (main and server tiers) and `api.app` (renderer) tell a mod which app it
+runs in: `{ id, name, home }`. The default app (`~/.t3`) has the id `"default"` and the name
+`null`. Set `T3MODS_APP_NAME` to give an app a name; without it, the name comes from the
+data folder (`.t3-work` gives `Work`).
+
+| Shared by all apps | Per app |
+|---|---|
+| The mods folder and the kit | Threads, projects and sign-in |
+| Mod state (`api.state`) | `ctx.app` and `api.app` |
+| Mod files and their hot reload | The backend, `main.cjs`, and the health of each mod |
+
+State writes merge per key: a save sends only the keys that this app changed, so app B does
+not undo app A's change to another key. A change that app A saves arrives live in app B:
+`subscribe`, `effect` and `useCell` run there too. If both apps set the same key, the last
+write wins. `ctx.state()` reads the file on each call. Keep per-app data under `ctx.app.id`
+in a key of your own, or in a file in `ctx.app.home`.
+
 ## Share a mod
 
 `pack` zips any folder that has a `mod.json`. `add` installs the zip only if that `mod.json`

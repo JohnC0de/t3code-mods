@@ -5,6 +5,7 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const store = require("./store.cjs");
@@ -32,16 +33,22 @@ function startEntry(file, ctx) {
   return { cleanup: () => {}, methods: {} };
 }
 
+// The backend inherits T3CODE_HOME and T3MODS_APP_NAME from main, so both tiers get one answer.
 const tierContext = (mod) => ({
   id: mod.id,
   dir: mod.dir,
+  app: platform.appInfo(process.env, os.homedir()),
   log: (...a) => LOG(`[${mod.id}]`, ...a),
   state: () => store.readState(mod.id),
 });
 
-const readHealth = () => {
+// Each main process writes its own health file; health.json is the last writer's copy, which
+// older main processes write alone and `t3mods list` reads.
+const healthFile = (mainPid) => path.join(RUN_DIR, `health-${mainPid}.json`);
+const readHealth = (mainPid) => {
+  const own = mainPid && healthFile(mainPid);
   try {
-    return JSON.parse(fs.readFileSync(HEALTH_FILE, "utf8"));
+    return JSON.parse(fs.readFileSync(own && fs.existsSync(own) ? own : HEALTH_FILE, "utf8"));
   } catch {
     return {};
   }
@@ -52,7 +59,7 @@ const readHealth = () => {
 function loadServerMods(rpc) {
   const active = new Map(); // id -> { cleanup, methods }
   const wanted = () => {
-    const health = readHealth();
+    const health = readHealth(rpc.mainPid);
     return new Map(store.listMods().filter((m) => m.enabled && m.files.server && health[m.id]?.status !== "degraded").map((m) => [m.id, m]));
   };
   const load = (mod) => {
@@ -84,7 +91,8 @@ function loadServerMods(rpc) {
   fs.watch(MODS_DIR, { recursive: true, persistent: false }, (_evt, file) => {
     if (!file) return;
     const f = file.replace(/\\/g, "/");
-    if (f === ".t3mods/config.json" || f === ".t3mods/health.json") resync = true;
+    // health.json also counts: it is the fallback, and another app's write only makes this one recompute.
+    if (f === ".t3mods/config.json" || f === ".t3mods/health.json" || f === `.t3mods/run/health-${rpc.mainPid}.json`) resync = true;
     else if (/^[^.][^/]*\/(server\.cjs|mod\.json)$/.test(f) || /^[^./][^/]*$/.test(f)) changed.add(f.split("/")[0].replace(/^_/, ""));
     else return;
     clearTimeout(timer);
@@ -254,8 +262,11 @@ function installMain() {
     for (const r of doctorReport.results) if (!["ok", "skipped"].includes(r.status)) LOG(`patch ${r.status}:`, r.key);
     for (const [id, h] of health) if (h.status === "degraded") LOG(`mod degraded: ${id}:`, h.problems.join("; "));
     try {
-      fs.mkdirSync(META_DIR, { recursive: true });
-      fs.writeFileSync(HEALTH_FILE, JSON.stringify(Object.fromEntries(health)));
+      const text = JSON.stringify(Object.fromEntries(health));
+      fs.mkdirSync(RUN_DIR, { recursive: true });
+      // Own file first: this app's backend reads it. health.json is for `t3mods list` and old backends.
+      fs.writeFileSync(healthFile(process.pid), text);
+      fs.writeFileSync(HEALTH_FILE, text);
     } catch {}
   }
   reloadPatches();
@@ -337,6 +348,7 @@ function installMain() {
         loader: LOADER_VERSION,
         version,
         modsDir: MODS_DIR,
+        app: platform.appInfo(process.env, os.homedir()),
         mods: modIndex(),
         doctor: doctorReport,
         served: [...patchStats].map(([key, hits]) => ({ key, hits })),
@@ -429,16 +441,16 @@ function installMain() {
       const { id } = JSON.parse(await request.text());
       return afterChange(store.uninstall(id));
     }
+    // The whole object (older runtimes) or a per-key patch; see store.patchState.
     if (action.startsWith("state/")) {
       const id = decodeURIComponent(action.slice("state/".length));
       store.writeState(id, JSON.parse(await request.text()));
-      // State can switch patches on and off through `predicate`; that needs a renderer reload.
-      if (!patches.some((p) => p.mod === id && typeof p.predicate === "function")) return { reload: false };
-      const before = [...activeKeys].join();
-      reloadPatches();
-      const reload = before !== [...activeKeys].join();
-      if (reload) pending.reload.add(id);
-      return { reload };
+      return { reload: afterStateWrite(id) };
+    }
+    if (action.startsWith("state-patch/")) {
+      const id = decodeURIComponent(action.slice("state-patch/".length));
+      store.patchState(id, JSON.parse(await request.text()));
+      return { reload: afterStateWrite(id) };
     }
     if (action === "open-folder") {
       const { id } = JSON.parse((await request.text()) || "{}");
@@ -470,6 +482,17 @@ function installMain() {
       return { results: P.tryPatch({ find: p.find, replace, group: p.group }, readChunks()) };
     }
     throw new Error(`unknown action ${action}`);
+  }
+
+  // State can switch patches on and off through `predicate`; that needs a renderer reload.
+  // Returns whether the set of applied patches changed.
+  function afterStateWrite(id) {
+    if (!patches.some((p) => p.mod === id && typeof p.predicate === "function")) return false;
+    const before = [...activeKeys].join();
+    reloadPatches();
+    const reload = before !== [...activeKeys].join();
+    if (reload) pending.reload.add(id);
+    return reload;
   }
 
   // Required on use, not at load: the loader also starts in the backend, and a kit that lacks
@@ -735,7 +758,9 @@ function installMain() {
     }
   }
 
-  app.on("quit", () => fs.rmSync(path.join(RUN_DIR, `server-${process.pid}.json`), { force: true }));
+  app.on("quit", () => {
+    for (const f of [`server-${process.pid}.json`, path.basename(healthFile(process.pid))]) fs.rmSync(path.join(RUN_DIR, f), { force: true });
+  });
   app.whenReady().then(() => {
     fs.mkdirSync(MODS_DIR, { recursive: true });
     let timer;
@@ -751,6 +776,29 @@ function installMain() {
       }, 60);
     });
     LOG("watching", MODS_DIR);
+    // Mod state that another app wrote. The watcher above skips dot paths on purpose, so this
+    // is a second one. This app's own writes come back through it too; the page ignores them
+    // because the values already match.
+    fs.mkdirSync(store.STATE_DIR, { recursive: true });
+    let stateTimer;
+    const stateQueued = new Set();
+    fs.watch(store.STATE_DIR, (_evt, file) => {
+      if (!file || !file.endsWith(".json")) return;
+      stateQueued.add(file.slice(0, -".json".length));
+      clearTimeout(stateTimer);
+      stateTimer = setTimeout(() => {
+        for (const id of stateQueued) {
+          let values = {};
+          try {
+            values = JSON.parse(fs.readFileSync(path.join(store.STATE_DIR, `${id}.json`), "utf8"));
+          } catch (e) {
+            if (e.code !== "ENOENT") continue; // half-written by a tool that does not rename; the next event follows
+          }
+          for (const wc of appContents()) wc.executeJavaScript(`window.__t3mods?.stateChanged?.(${JSON.stringify(id)}, ${JSON.stringify(values)})`).catch(() => {});
+        }
+        stateQueued.clear();
+      }, 50);
+    });
     // `t3mods dev` runs the loader from a checkout: also watch the builtins and the runtime.
     if (process.env.T3MODS_LOADER) {
       let devTimer;
