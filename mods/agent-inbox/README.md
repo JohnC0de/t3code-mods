@@ -11,6 +11,18 @@ that you snoozed.
 - **Inbox.** `Ctrl+Alt+Space` from any app, or a click on the strip. One card at a time:
   questions, approvals, finished work and failures, most urgent first.
 
+## Several apps
+
+If you run more than one T3 Code app from one install (for example a personal one and a
+"Work" one), they share one strip, one shortcut and one inbox. The inbox shows the threads of
+all running apps, with the app name next to the project ("Work · api"). With one app running,
+no name shows.
+
+The app that started first shows the strip and owns `Ctrl+Alt+Space`. If you quit it, another
+running app takes over within a few seconds. An answer, approval or reply goes to the app that
+owns the thread. The strip position is shared; the "Show the edge strip" option of the app that
+shows the strip decides.
+
 ## Keys
 
 | Key | Does |
@@ -39,6 +51,8 @@ shortcut when the strip is off.
   T3 Code and run `node loader/t3mods.mjs install` again.
 - Not on the registry yet. Install it from this repository: `t3mods pack mods/agent-inbox`,
   then `t3mods add` the zip.
+- `hub.cjs` connects the apps through a named pipe (a unix socket outside Windows) that only
+  your user account and mods folder map to. It has no network access.
 - `main.cjs` runs in the Electron main process, so changes to it need a T3 Code restart. The
   strip and inbox pages reload on their own when you edit them.
 - `preview.html` shows both pages with sample data (`mock-model.js`) in a normal browser, for

@@ -33,6 +33,10 @@ export function h(tag, props = {}, ...kids) {
   return el;
 }
 
+// Where a thread lives: "Work · api" when several apps run, else just the project.
+// An older main sends no `app`.
+export const where = (item) => (item.app ? `${item.app} · ${item.project}` : item.project);
+
 export const kbd = (text) => h("kbd", {}, text);
 
 export const STATUS_LABEL = {

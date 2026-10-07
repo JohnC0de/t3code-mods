@@ -1,36 +1,39 @@
 // Agent Inbox, main-process half: the edge strip and the inbox panel windows, the global
-// shortcut, and the relay between them and the app page (renderer.js). Pages and transport:
+// shortcut, and the relay between them and the app page (renderer.js). Several T3 Code apps can
+// run from one mods folder: hub.cjs elects one of them leader; only the leader has the windows
+// and the shortcut, and it shows the models of all apps merged. Pages and transport:
 // CONTRACT.md. A change here needs an app restart; the pages reload by themselves.
 "use strict";
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { createHub, endpointFor } = require("./hub.cjs");
 
 const SHORTCUT = "Control+Alt+Space";
 const PAGE = "t3code://app/__mods/agent-inbox/";
 const PANEL = { inbox: { width: 460, height: 600 }, peek: { width: 340, height: 170 } };
 const SHADOW = 8; // transparent margin around the pill and the card, in each page's CSS
+const DRAG_QUIET_MS = 1500; // after a drag, models that still carry the old position are ignored
 
 /** @type {import("../../loader/types/t3mods").MainEntry} */
 module.exports = (ctx) => {
   const { app, BrowserWindow, screen, globalShortcut } = ctx.electron;
   const renderer = ctx.renderer();
+  const me = ctx.app ?? { id: "default", name: null, home: "" }; // an older loader has no ctx.app
   const ours = new Set();
-  const settingsFile = () => path.join(app.getPath("userData"), "agent-inbox.json");
-  let saved = { y: 0.5 };
-  let model = null;
+  let model = null; // what the windows show: the merged model of all apps (leader only)
+  let merge = null; // mergeModels from model.mjs, loaded below
+  let leading = false;
+  let ready = false;
   let strip = null;
   let panel = null;
   let view = null; // what the panel shows, or null when hidden
   let stripSize = { width: 56, height: 160 };
+  let stripY = 0.5; // 0 top .. 1 bottom of the work area; the shared value lives in renderer.js
+  let dragAt = 0;
+  let shortcutTimer = 0;
   let quitting = false;
-
-  const readSaved = () => {
-    try {
-      saved = { ...saved, ...JSON.parse(fs.readFileSync(settingsFile(), "utf8")) };
-    } catch {}
-  };
-  const writeSaved = () => fs.writeFile(settingsFile(), JSON.stringify(saved), () => {});
 
   const alive = (w) => w && !w.isDestroyed();
   const push = (w, code) => {
@@ -73,7 +76,7 @@ module.exports = (ctx) => {
     if (!alive(strip)) return;
     const wa = workArea();
     const { width, height } = stripSize;
-    const y = Math.round(Math.min(Math.max(wa.y + saved.y * wa.height - height / 2, wa.y), wa.y + wa.height - height));
+    const y = Math.round(Math.min(Math.max(wa.y + stripY * wa.height - height / 2, wa.y), wa.y + wa.height - height));
     // The pill's shadow margin goes off screen, so the pill touches the edge.
     strip.setBounds({ x: wa.x + wa.width - width + SHADOW - 2, y, width, height });
   }
@@ -86,8 +89,13 @@ module.exports = (ctx) => {
     strip.on("moved", () => {
       const b = strip.getBounds();
       const wa = workArea();
-      saved.y = Math.min(Math.max((b.y + b.height / 2 - wa.y) / wa.height, 0), 1);
-      writeSaved();
+      const next = Math.min(Math.max((b.y + b.height / 2 - wa.y) / wa.height, 0), 1);
+      if (Math.abs(next - stripY) > 0.0005) {
+        stripY = next;
+        dragAt = Date.now();
+        // Saved in the app's state, which all running apps share.
+        renderer.setStripY(next).catch((e) => ctx.log("could not save the strip position:", e.message));
+      }
       placeStrip();
     });
     return strip;
@@ -127,7 +135,7 @@ module.exports = (ctx) => {
     if (alive(panel)) panel.hide();
   }
   const cardFor = (threadKey) => model?.cards.find((c) => c.threadKey === threadKey)?.key ?? null;
-  function openInbox({ cardKey, threadKey } = {}) {
+  function showInbox({ cardKey, threadKey } = {}) {
     if (!model) return false;
     if (threadKey && !cardKey && !cardFor(threadKey)) {
       // No card for this agent: take the user to the thread instead.
@@ -138,14 +146,23 @@ module.exports = (ctx) => {
     showPanel({ mode: "inbox", cardKey: cardKey ?? (threadKey ? cardFor(threadKey) : model.cards[0]?.key ?? null) }, { focus: true });
     return true;
   }
+  function showList() {
+    if (!model) return false;
+    showPanel({ mode: "list" }, { focus: true });
+    return true;
+  }
 
   // ---------- app window and quit ----------
+  // On Windows a process may take the keyboard focus only when it got the last input, and for a
+  // thread of a follower app the leader got it. Topmost for a moment still brings the window up.
   function focusApp() {
     const w = appWindow();
     if (!w) return;
     if (w.isMinimized()) w.restore();
     w.show();
+    w.setAlwaysOnTop(true);
     w.focus();
+    w.setAlwaysOnTop(false);
   }
   function destroyAll() {
     for (const w of [...ours]) if (alive(w)) w.destroy();
@@ -164,7 +181,8 @@ module.exports = (ctx) => {
   });
   app.on("before-quit", () => {
     quitting = true;
-    destroyAll();
+    stopLeading();
+    hub.close(); // followers elect a new leader at once
   });
 
   // ---------- page reload while editing the mod ----------
@@ -177,50 +195,102 @@ module.exports = (ctx) => {
     }, 80);
   });
 
+  // ---------- leader: shortcut and the merged model ----------
+  const toggle = () => (alive(panel) && panel.isVisible() && view?.mode !== "peek" ? hidePanel() : showInbox({}));
+  // The previous leader may still hold the shortcut for a moment after it quit.
+  function registerShortcut(tries = 0) {
+    if (!leading || globalShortcut.register(SHORTCUT, toggle)) return;
+    if (tries >= 5) return ctx.log(`could not register ${SHORTCUT}; another app may own it`);
+    shortcutTimer = setTimeout(() => registerShortcut(tries + 1), 1000);
+  }
+  function startLeading() {
+    if (!ready || leading || quitting) return;
+    leading = true;
+    registerShortcut();
+    refresh();
+  }
+  function stopLeading() {
+    leading = false;
+    clearTimeout(shortcutTimer);
+    // A second launch quits before the app is ready, and globalShortcut throws until then.
+    if (app.isReady()) globalShortcut.unregister(SHORTCUT);
+    destroyAll();
+  }
+
+  // The leader shows all apps' models merged; with one app that is its own model.
+  function refresh() {
+    if (!leading || !merge || quitting) return;
+    model = merge(hub.models());
+    if (!model) {
+      if (alive(strip)) strip.hide();
+      hidePanel();
+      return;
+    }
+    if (typeof model.stripY === "number" && Date.now() - dragAt > DRAG_QUIET_MS && Math.abs(model.stripY - stripY) > 0.0005) {
+      stripY = model.stripY;
+      placeStrip();
+    }
+    ensureStrip();
+    for (const w of ours) push(w, `window.inbox?.update(${JSON.stringify(model)})`);
+    if (model.strip === false) strip.hide();
+    else if (!strip.isVisible() && !strip.webContents.isLoading()) strip.showInactive();
+  }
+
+  // Runs an action in this app (the hub calls it for threads this app owns).
+  async function localAct(action) {
+    await renderer.act(action);
+    if (action.type === "open") focusApp();
+    return true;
+  }
+  async function act(action) {
+    await hub.act(action);
+    if (action.type === "open") hidePanel();
+    return true;
+  }
+
+  const hub = createHub({
+    endpoint: endpointFor(fs.realpathSync(path.dirname(ctx.dir))),
+    app: me,
+    act: localAct,
+    ui: { openInbox: showInbox, openList: showList },
+    onChange: refresh,
+    onRole: (isLeader) => {
+      if (isLeader) app.whenReady().then(startLeading);
+      else if (leading) stopLeading();
+    },
+    log: ctx.log,
+  });
+
+  import(pathToFileURL(path.join(ctx.dir, "model.mjs")).href).then(
+    (m) => {
+      merge = m.mergeModels;
+      refresh();
+    },
+    (e) => ctx.log("could not load model.mjs:", e.message),
+  );
   app.whenReady().then(() => {
-    readSaved();
-    const toggle = () => (alive(panel) && panel.isVisible() && view?.mode !== "peek" ? hidePanel() : openInbox({}));
-    if (!globalShortcut.register(SHORTCUT, toggle)) ctx.log(`could not register ${SHORTCUT}; another app may own it`);
+    ready = true;
+    if (hub.isLeader()) startLeading();
     const replace = () => placeStrip();
     screen.on("display-metrics-changed", replace);
     screen.on("display-added", replace);
     screen.on("display-removed", replace);
   });
-
-  async function act(action) {
-    await renderer.act(action);
-    if (action.type === "open") {
-      hidePanel();
-      focusApp();
-    }
-    return true;
-  }
+  hub.start();
 
   return {
-    // From renderer.js: the newest model, or null when the mod stopped in the app page.
+    // From renderer.js: the newest model of this app, or null when the mod stopped in the app page.
     publish(next) {
       if (quitting) return false;
-      model = next;
-      if (!model) {
-        if (alive(strip)) strip.hide();
-        hidePanel();
-        return true;
-      }
-      ensureStrip();
-      for (const w of ours) push(w, `window.inbox?.update(${JSON.stringify(model)})`);
-      if (model.strip === false) strip.hide();
-      else if (!strip.isVisible() && !strip.webContents.isLoading()) strip.showInactive();
+      hub.setModel(next);
       return true;
     },
-    // From the pages (CONTRACT.md).
+    // From the pages (CONTRACT.md); they run in the leader.
     state: () => model,
     act,
-    openInbox,
-    openList() {
-      if (!model) return false;
-      showPanel({ mode: "list" }, { focus: true });
-      return true;
-    },
+    // The palette commands run in any app; a follower's call goes to the leader.
+    openInbox: (opts) => hub.ui("openInbox", opts),
+    openList: () => hub.ui("openList"),
     peek({ threadKey, y }) {
       if (!model || (alive(panel) && panel.isVisible() && view && view.mode !== "peek")) return false;
       showPanel({ mode: "peek", threadKey }, { centerY: y });
@@ -247,8 +317,8 @@ module.exports = (ctx) => {
     // future main reload has a clean exit.
     dispose() {
       watcher.close();
-      globalShortcut.unregister(SHORTCUT);
-      destroyAll();
+      stopLeading();
+      hub.close();
     },
   };
 };

@@ -37,6 +37,7 @@
     <button data-do="empty">Empty model</button>
     <button data-do="update">Model update</button>
     <button data-do="multi">Multi-question card</button>
+    <button data-do="oneapp">One app (no names)</button>
     <button data-do="reset">Reset</button>
     <button data-do="wall">Light/dark wallpaper</button>
     <button data-do="clearlog">Clear log</button>
@@ -125,7 +126,7 @@ window.__inboxRpc = async (method, args, who) => {
 
 const multiCard = () => ({
   key: "multi|q|req-m", kind: "question", threadKey: "env-local\u0000t1", ref: { environmentId: "env-local", threadId: "t1" },
-  title: "Two-step setup", project: "web", status: "input", at: Date.now() - 90_000,
+  title: "Two-step setup", project: "web", app: "Personal", status: "input", at: Date.now() - 90_000,
   message: "Two quick questions before I scaffold the project.", canReply: true, requestId: "req-m",
   questions: [
     { id: "lang", header: "Language", question: "Which language?", multiSelect: false, allowCustom: false,
@@ -151,6 +152,12 @@ const actions = {
     model = m; push();
   },
   multi: () => { model.cards.unshift(multiCard()); recount(); push(); showPanel({ mode: "inbox", cardKey: "multi|q|req-m" }); },
+  oneapp: () => {
+    const untag = (items) => items.map((i) => ({ ...i, app: null }));
+    const m = structuredClone(mockModel);
+    model = { ...m, apps: [{ id: "default", name: null }], dots: untag(m.dots), cards: untag(m.cards), agents: untag(m.agents) };
+    push();
+  },
   reset: () => { model = structuredClone(mockModel); push(); showPanel({ mode: "inbox", cardKey: null }); },
   wall: () => desk.classList.toggle("light"),
   clearlog: () => (logEl.textContent = ""),

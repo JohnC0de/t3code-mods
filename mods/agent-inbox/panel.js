@@ -1,4 +1,4 @@
-import { rpc, h, kbd, renderText, toPlain, timeAgo, statusLabel, cardStatusLine, reducedMotion } from "./shared.js";
+import { rpc, h, kbd, renderText, toPlain, timeAgo, statusLabel, cardStatusLine, reducedMotion, where } from "./shared.js";
 
 const root = document.getElementById("app");
 const live = document.getElementById("live");
@@ -328,7 +328,7 @@ function inboxView() {
       h(
         "div",
         { class: "meta" },
-        h("span", { class: "proj" }, card.project),
+        h("span", { class: "proj" }, where(card)),
         h("span", { class: "sep" }, "·"),
         h("span", { "data-tone": card.status }, cardStatusLine(card)),
         card.kind === "done" ? null : h("span", { class: "ago" }, timeAgo(card.at)),
@@ -365,8 +365,8 @@ function emptyView() {
 function listRows() {
   const groups = new Map();
   for (const a of model.agents) {
-    if (!groups.has(a.project)) groups.set(a.project, []);
-    groups.get(a.project).push(a);
+    if (!groups.has(where(a))) groups.set(where(a), []);
+    groups.get(where(a)).push(a);
   }
   return [...groups].flatMap(([, agents]) => agents);
 }
@@ -376,8 +376,8 @@ function listView() {
   listSel = Math.min(listSel, Math.max(0, rows.length - 1));
   const groups = new Map();
   rows.forEach((a, i) => {
-    if (!groups.has(a.project)) groups.set(a.project, []);
-    groups.get(a.project).push([a, i]);
+    if (!groups.has(where(a))) groups.set(where(a), []);
+    groups.get(where(a)).push([a, i]);
   });
   const body = h("div", { class: "body" });
   if (!rows.length) body.append(h("p", { class: "empty" }, "No agents yet."));
@@ -427,7 +427,7 @@ function peekView() {
     "section",
     { class: "card peek", "aria-hidden": "true" },
     h("div", { class: "row" }, h("span", { class: "sd", "data-status": agent.status }), h("h1", { class: "title" }, agent.title)),
-    h("div", { class: "meta" }, h("span", { class: "proj" }, agent.project), h("span", { class: "sep" }, "·"), h("span", { "data-tone": agent.status }, status)),
+    h("div", { class: "meta" }, h("span", { class: "proj" }, where(agent)), h("span", { class: "sep" }, "·"), h("span", { "data-tone": agent.status }, status)),
     lines.length ? h("p", { class: "pk" }, lines.join("\n")) : null,
     card?.kind === "question" ? h("p", { class: "pq" }, card.questions[0].question) : null,
   );

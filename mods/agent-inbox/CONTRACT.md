@@ -15,8 +15,8 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
 
 | Method | Args | Does |
 |---|---|---|
-| `state()` | | Returns the current `Model`, or `null` before the app page has published one |
-| `act(action)` | `Action` | Runs the action in the app page; resolves when the app accepted it, rejects with the reason |
+| `state()` | | Returns the current `Model`, or `null` before an app page has published one |
+| `act(action)` | `Action` | Runs the action in the app that owns the thread; resolves when that app accepted it, rejects with the reason |
 | `openInbox(opts)` | `{ cardKey?, threadKey? }` | Shows and focuses the panel in inbox view at that card (or at the first card of that thread) |
 | `openList()` | | Shows and focuses the panel in list view |
 | `peek(opts)` | `{ threadKey, y }` | Shows the panel without focus in peek view, next to the strip, at screen-relative strip `y` |
@@ -38,10 +38,12 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
 ```js
 {
   version: 1,
-  at: 1760000000000,                 // ms, when the app page built it
+  at: 1760000000000,                 // ms, when the app page built it (merged: the newest)
   strip: true,                       // false: hide the strip (the panel still opens by shortcut)
   shortcut: "Ctrl+Alt+Space",        // label for hints
   undoMs: 2500,                      // undo window before an answer is sent
+  stripY: 0.5,                       // strip position on the screen edge, 0 top .. 1 bottom
+  apps: [{ id, name }],              // the apps merged in this model (merged models only)
   counts: { attention: 2, working: 3, done: 1 },
   dots: [Dot],                       // strip order, at most 12
   overflow: 0,                       // threads not shown as dots
@@ -49,8 +51,10 @@ in the app page, so they have no mod API and no React. They talk to `main.cjs` o
   agents: [Agent],                   // list view, newest first
 }
 
-Dot   = { threadKey, ref, title, project, status, unread }
-Agent = { threadKey, ref, title, project, status, unread, updatedAt, branch }
+Dot   = { threadKey, ref, title, project, app, status, unread, updatedAt }
+Agent = { threadKey, ref, title, project, app, status, unread, updatedAt, branch }
+app   = string | null   // display name of the owning app when more than one app runs, else null
+                        // (a nameless default app is "Personal" next to others)
 ref   = { environmentId, threadId }
 status: "working" | "approval" | "input" | "failed" | "limited" | "done" | "idle"
   // done = finished and not yet seen; idle = finished and seen
@@ -58,7 +62,7 @@ status: "working" | "approval" | "input" | "failed" | "limited" | "done" | "idle
 Card = {
   key,                               // stable while the card is the same request/result
   kind: "question" | "approval" | "done" | "failed",
-  threadKey, ref, title, project, status,
+  threadKey, ref, title, project, app, status,
   at,                                // ms: when it started waiting, or finished
   message,                           // string | null: the agent's last message (Markdown text)
   canReply,                          // a free-text reply is allowed
@@ -88,3 +92,30 @@ Card = {
 Answers, approvals and replies wait `undoMs` in the panel first; Esc cancels them there.
 `act` re-checks in the app that the request is still pending and rejects otherwise
 ("The question changed"), so show the error on the card.
+
+## Several apps (hub.cjs)
+
+Apps that run from one mods folder each run `main.cjs`. `hub.cjs` connects them over one
+endpoint per user and mods folder: the pipe `\\.\pipe\t3mods-agent-inbox-<12 hex of
+sha1(lower-cased mods dir + user name)>` on Windows, a socket file in the temp folder elsewhere.
+Messages are JSON lines.
+
+- The first app to listen is the **leader**; the others are **followers**. Only the leader opens
+  the strip and panel windows and registers the shortcut. The pages talk to the leader's `main.cjs`.
+- A follower sends `hello` (`{ v: 1, app: { id, name, home } }`), then its newest model, and again
+  on every change. `app` is `ctx.app`; an older loader gives `{ id: "default", name: null }`.
+- The leader keeps each app's latest model and shows `mergeModels(...)` of them (`model.mjs`),
+  its own first: cards by kind (question and approval, failed, done) then newest; dots by
+  status then newest, at most 12; agents newest first, at most 40; counts summed. A thread that
+  two apps show stays with the first. `strip`, `shortcut`, `undoMs` and `stripY` come from the
+  leader's model.
+- `act` goes to the app that owns the thread (matched by `ref.environmentId` and `threadId`),
+  which runs it in its app page. An unknown thread is refused; an app that does not answer
+  within 15 s gives an error. `open` also focuses that app's window.
+- The palette commands "open the inbox" and "show all agents" work in every app: a follower
+  sends them to the leader as `ui` calls.
+- When the leader quits, the followers pick a new leader (random delay, retry); the new leader
+  takes over the windows and the shortcut, and the others send their models again. When a
+  follower quits, its model leaves the merge.
+- `stripY` is a state cell of the mod, shared by the running apps. After a drag the leader's
+  `main.cjs` calls the `setStripY` export of `renderer.js`.

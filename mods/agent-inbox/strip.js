@@ -1,4 +1,4 @@
-import { rpc, h } from "./shared.js";
+import { rpc, h, where } from "./shared.js";
 
 const wrap = document.getElementById("wrap");
 const TRAY =
@@ -42,7 +42,8 @@ function render(model) {
       {
         class: `dotbtn${d.unread ? " unread" : ""}`,
         type: "button",
-        "aria-label": `${d.title}, ${d.project}`,
+        "aria-label": `${d.title}, ${where(d)}`,
+        title: d.app ? where(d) : null,
         onclick: () => {
           clearTimeout(hoverTimer);
           call("openInbox", { threadKey: d.threadKey });

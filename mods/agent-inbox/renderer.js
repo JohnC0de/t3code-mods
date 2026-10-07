@@ -4,12 +4,14 @@
 import { buildInbox, wantDetails } from "./model.mjs";
 
 const SHORTCUT = "Ctrl+Alt+Space";
-let current = null; // { api, dismissed } of the running instance, for act()
+let current = null; // { api, dismissed, stripY } of the running instance, for act()
 
 /** @param {import("../../loader/types/t3mods").RendererApi} api */
 export default (api) => {
   const strip = api.state.boolean("strip", true);
   const since = api.state.number("since", 0);
+  // Where the strip sits on the screen edge (0 top .. 1 bottom); every running app shares it.
+  const stripY = api.state.number("stripY", 0.5);
   if (!since.get()) since.set(Date.now());
   const dismissed = api.state.value("dismissed", {
     default: {},
@@ -27,7 +29,7 @@ export default (api) => {
     clearTimeout(timer);
     timer = setTimeout(() => {
       const values = new Map([...details].filter(([, d]) => d.value).map(([k, d]) => [k, d.value]));
-      const { model, stale } = buildInbox({ threads, details: values, dismissed: dismissed.get(), since: since.get(), now: Date.now(), strip: strip.get(), shortcut: SHORTCUT });
+      const { model, stale } = buildInbox({ threads, details: values, dismissed: dismissed.get(), since: since.get(), now: Date.now(), strip: strip.get(), shortcut: SHORTCUT, stripY: stripY.get() });
       if (stale.length) dismissed.set((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !stale.includes(k))));
       const json = JSON.stringify({ ...model, at: 0 });
       if (json === last) return;
@@ -61,6 +63,7 @@ export default (api) => {
     publish();
   });
   strip.subscribe(publish);
+  stripY.subscribe(publish);
   dismissed.subscribe(publish);
   // Times in the model ("finished 3 min ago") come from `at`; re-send now and then so a model
   // that did not change still reaches a strip that opened later.
@@ -72,7 +75,7 @@ export default (api) => {
   api.command({ id: "open", title: "Agent Inbox: open the inbox", searchTerms: ["inbox", "agents", "questions"], run: () => main.openInbox({}) });
   api.command({ id: "list", title: "Agent Inbox: show all agents", searchTerms: ["inbox", "agents"], run: () => main.openList() });
 
-  current = { api, dismissed };
+  current = { api, dismissed, stripY };
   api.lifecycle.own(() => {
     clearTimeout(timer);
     clearInterval(tick);
@@ -82,6 +85,12 @@ export default (api) => {
     fetch("/__mods/rpc/main/agent-inbox/publish", { method: "POST", body: "[null]" }).catch(() => {});
   });
 };
+
+/** Called by main.cjs (ctx.renderer().setStripY) when the user drags the strip. */
+export function setStripY(y) {
+  if (!current) throw new Error("Agent Inbox is not running in the app");
+  current.stripY.set(Math.min(1, Math.max(0, Number(y))));
+}
 
 /** Called by main.cjs (ctx.renderer().act) when the user answers or clears a card. */
 export async function act(action) {

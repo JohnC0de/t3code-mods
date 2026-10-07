@@ -57,16 +57,17 @@ export const cardKey = {
 /**
  * threads: api.threads.list(); details: Map thread key -> api.threads.watch value;
  * dismissed: { [cardKey]: ms } (cards the user cleared without answering).
- * Returns the model and `stale`: dismissed keys whose card no longer exists, to forget.
+ * Returns the model and `stale`: dismissed keys whose card no longer exists, to forget. The
+ * dismissed map is shared by every running app, so only keys of this app's environments count.
  */
-export function buildInbox({ threads, details, dismissed = {}, since, now, strip = true, shortcut, undoMs = 2500 }) {
+export function buildInbox({ threads, details, dismissed = {}, since, now, strip = true, shortcut, undoMs = 2500, stripY = 0.5 }) {
   const live = threads.filter((t) => isLive(t, now));
   const base = (t) => ({ threadKey: t.key, ref: t.ref, title: t.title || "Untitled thread", project: t.project ?? "No project", status: displayStatus(t, since) });
 
   const shown = live
     .filter((t) => displayStatus(t, since) !== "idle")
     .sort((a, b) => RANK[displayStatus(a, since)] - RANK[displayStatus(b, since)] || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  const dots = shown.slice(0, MAX_DOTS).map((t) => ({ ...base(t), unread: t.unread }));
+  const dots = shown.slice(0, MAX_DOTS).map((t) => ({ ...base(t), unread: t.unread, updatedAt: ms(t.updatedAt) ?? 0 }));
 
   const attention = [];
   const failed = [];
@@ -102,7 +103,9 @@ export function buildInbox({ threads, details, dismissed = {}, since, now, strip
   // bring back a card the user cleared.
   const loaded = new Set(live.filter((t) => details.has(t.key)).map((t) => t.key));
   const keys = new Set(all.map((c) => c.key));
-  const stale = Object.keys(dismissed).filter((k) => !keys.has(k) && (loaded.has(k.split("|")[0]) || !live.some((t) => t.key === k.split("|")[0])));
+  const envs = new Set(threads.map((t) => t.ref.environmentId));
+  const mine = (k) => [...envs].some((env) => k.startsWith(`${env}/`));
+  const stale = Object.keys(dismissed).filter((k) => mine(k) && !keys.has(k) && (loaded.has(k.split("|")[0]) || !live.some((t) => t.key === k.split("|")[0])));
 
   const agents = live.slice(0, MAX_AGENTS).map((t) => ({ ...base(t), unread: t.unread, updatedAt: ms(t.updatedAt) ?? 0, branch: t.branch }));
 
@@ -112,6 +115,7 @@ export function buildInbox({ threads, details, dismissed = {}, since, now, strip
     strip,
     shortcut,
     undoMs,
+    stripY,
     counts: {
       attention: live.filter((t) => t.status === "approval" || t.status === "input").length,
       working: live.filter((t) => t.status === "working").length,
@@ -123,4 +127,46 @@ export function buildInbox({ threads, details, dismissed = {}, since, now, strip
     agents,
   };
   return { model, stale };
+}
+
+const KIND_RANK = { question: 0, approval: 0, failed: 1, done: 2 };
+
+/**
+ * entries: [{ app: { id, name }, model }], the leader's own first (a null model is skipped).
+ * Returns one model of the same shape plus `apps`; every dot, card and agent gets `app`, the
+ * app's display name (null when only one app runs). Strip settings come from the first model.
+ */
+export function mergeModels(entries) {
+  const list = entries.filter((e) => e.model);
+  if (!list.length) return null;
+  const multi = list.length > 1;
+  const label = (a) => (multi ? (a.name ?? (a.id === "default" ? "Personal" : a.id)) : null);
+  // One list of all apps; a thread two apps both show stays with the first app.
+  const gather = (field) => {
+    const seen = new Set();
+    return list.flatMap(({ app, model }) => {
+      const items = (model[field] ?? []).filter((i) => !seen.has(i.threadKey)).map((i) => ({ ...i, app: label(app) }));
+      for (const i of model[field] ?? []) seen.add(i.threadKey);
+      return items;
+    });
+  };
+  const lead = list[0].model;
+  const dots = gather("dots").sort((a, b) => RANK[a.status] - RANK[b.status] || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  const agents = gather("agents");
+  if (multi) agents.sort((a, b) => b.updatedAt - a.updatedAt);
+  const sum = (f) => list.reduce((n, e) => n + (f(e.model) ?? 0), 0);
+  return {
+    version: 1,
+    at: Math.max(...list.map((e) => e.model.at ?? 0)),
+    strip: lead.strip,
+    shortcut: lead.shortcut,
+    undoMs: lead.undoMs,
+    stripY: lead.stripY ?? 0.5,
+    apps: list.map(({ app }) => ({ id: app.id, name: multi ? label(app) : (app.name ?? null) })),
+    counts: { attention: sum((m) => m.counts.attention), working: sum((m) => m.counts.working), done: sum((m) => m.counts.done) },
+    dots: dots.slice(0, MAX_DOTS),
+    overflow: sum((m) => m.overflow) + Math.max(0, dots.length - MAX_DOTS),
+    cards: gather("cards").sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.at - a.at),
+    agents: agents.slice(0, MAX_AGENTS),
+  };
 }
