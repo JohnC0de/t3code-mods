@@ -1,0 +1,62 @@
+/* Find bar (fixed, placed over the top-right corner of the thread) and match highlights. */
+
+::highlight(t3mod-find) {
+  background-color: rgb(250 204 21 / 0.4);
+}
+::highlight(t3mod-find-current) {
+  background-color: rgb(249 115 22 / 0.9);
+  color: #000;
+}
+
+.t3mod-find {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover, var(--background));
+  color: var(--foreground);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+  font-size: 13px;
+}
+.t3mod-find input {
+  width: 200px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.t3mod-find__count {
+  min-width: 52px;
+  padding: 0 6px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.t3mod-find[data-empty] .t3mod-find__count {
+  color: rgb(239 68 68);
+}
+.t3mod-find button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.t3mod-find button:hover {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+.t3mod-find button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}

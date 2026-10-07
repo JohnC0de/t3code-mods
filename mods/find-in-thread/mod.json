@@ -1,0 +1,6 @@
+{
+  "id": "find-in-thread",
+  "name": "Find in thread",
+  "version": "1.0.0",
+  "description": "Ctrl+F finds and highlights text in the open thread, also in messages scrolled out of view."
+}
