@@ -53,6 +53,12 @@ try {
 } finally {
   stop();
   await registry.close();
-  fs.rmSync(profile, { recursive: true, force: true });
+  // On Windows the killed app can hold its profile files for some seconds. A leftover temp
+  // folder is not a test result, so it only warns.
+  try {
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  } catch (e) {
+    console.warn(`e2e-registry: could not remove ${profile}: ${e.code}`);
+  }
 }
 process.exit(code);
