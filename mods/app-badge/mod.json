@@ -2,7 +2,7 @@
   "id": "app-badge",
   "name": "App badge",
   "version": "0.2.0",
-  "description": "Marks a named app (second T3 Code app, T3MODS_APP_NAME): window title \"T3 <name>\" and, on Windows, a taskbar badge with the first letter of the name.",
+  "description": "Tells your T3 Code apps apart: a named app (T3MODS_APP_NAME) gets the window title \"T3 <name>\" and, on Windows, a taskbar badge with the first letter of the name.",
   "tags": ["windows", "taskbar", "multi-app"],
   "repository": "https://github.com/JohnC0de/t3code-mods",
   "license": "MIT"

@@ -2,5 +2,8 @@
   "id": "find-in-thread",
   "name": "Find in thread",
   "version": "1.0.0",
-  "description": "Ctrl+F finds and highlights text in the open thread, also in messages scrolled out of view."
+  "description": "Ctrl+F (Cmd+F) finds and highlights text in the open thread, also in messages scrolled out of view.",
+  "tags": ["search", "timeline", "ui"],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
 }
