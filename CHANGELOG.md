@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **New mod `working-bg-commands`:** with the Working section on, a thread whose agent ended its
+  turn while a background command still runs stays in Working instead of dropping into the
+  inbox. T3 counts only subagents and monitors there (#14872), so an agent that waits on a
+  background Bash looked done. Port of t3code PR #15413: a failed run, an approval, a question
+  or a ready plan still goes to the inbox, and alerts and auto-settle do not change.
 - **New mod `thread-details-closed`:** the thread details panel (project, branch, Commit & push,
   Changes) starts closed in every thread instead of open. Its toolbar button opens it, and a
   thread where you open it keeps it open across restarts. T3 has no setting for this: the

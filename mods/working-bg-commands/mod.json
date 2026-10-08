@@ -1,0 +1,9 @@
+{
+  "id": "working-bg-commands",
+  "name": "Working keeps background commands",
+  "version": "1.0.0",
+  "description": "With the Working section on, a thread whose agent ended its turn while a background command still runs stays in Working instead of dropping into the inbox. Port of t3code PR #15413.",
+  "tags": ["sidebar", "working"],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}
