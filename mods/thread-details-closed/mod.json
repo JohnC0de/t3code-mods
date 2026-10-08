@@ -1,0 +1,9 @@
+{
+  "id": "thread-details-closed",
+  "name": "Thread details closed",
+  "version": "1.0.0",
+  "description": "The thread details panel (project, branch, commit and changes) starts closed in every thread. Open it with its toolbar button; that thread then keeps it open.",
+  "tags": ["layout", "ui"],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

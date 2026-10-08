@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **New mod `thread-details-closed`:** the thread details panel (project, branch, Commit & push,
+  Changes) starts closed in every thread instead of open. Its toolbar button opens it, and a
+  thread where you open it keeps it open across restarts. T3 has no setting for this: the
+  default lives in the right panel store, and the mod flips it at all four places that assume
+  it, as one group patch.
 - **Mods page scrolls and follows the app's settings layout.** The settings route gave the page
   no scroll container, so everything below the window was cut off. The page now brings the
   app's own scroller and top fade, a 56rem column and labelled sections over grouped cards:
