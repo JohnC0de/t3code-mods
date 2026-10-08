@@ -1,50 +1,84 @@
-/* Mods manager. Uses the app's theme variables, so it follows light, dark and custom themes. */
+/* Mods manager. Uses the app's theme variables, so it follows light, dark and custom themes.
+   Sizes follow the app's own settings pages: a 56rem column, labelled sections, grouped cards. */
+.t3m-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+}
 .t3m-page {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 2rem;
   width: 100%;
-  max-width: 52rem;
+  max-width: 56rem;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 3rem;
   color: var(--foreground);
   font-size: 0.875rem;
 }
+.t3m-page-title, .t3m-entry-title, .t3m-setting-text, .t3m-meta, .t3m-input, .t3m-field, .t3m-result { min-width: 0; }
 .t3m-page h1 { font-size: 1.25rem; font-weight: 600; }
-.t3m-page h2 { font-size: 0.95rem; font-weight: 600; }
-.t3m-page h3 { font-size: 0.9rem; font-weight: 600; }
-.t3m-page-head { display: flex; flex-direction: column; gap: 0.5rem; }
+.t3m-page h2, .t3m-page h3, .t3m-page h4 { font-size: 0.875rem; font-weight: 500; }
 .t3m-muted { color: var(--muted-foreground); }
 .t3m-error { color: var(--destructive); }
 .t3m-ok { color: var(--foreground); }
 .t3m-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.t3m-actions { flex-shrink: 0; }
+.t3m-desc, .t3m-problems, .t3m-warning, .t3m-note, .t3m-banner, .t3m-patches, .t3m-entry-title { overflow-wrap: anywhere; }
 
-.t3m-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 0.6rem);
-  background: var(--card);
-  color: var(--card-foreground);
+.t3m-page-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.75rem 1.5rem; }
+.t3m-page-title { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 20rem; }
+.t3m-page-title p { font-size: 0.8rem; }
+
+/* Section: label above a card of divided rows. */
+.t3m-section { display: flex; flex-direction: column; gap: 0.625rem; }
+.t3m-section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0 1rem; font-size: 0.8rem; }
+.t3m-section-head h2 { color: color-mix(in srgb, var(--foreground) 70%, transparent); font-weight: 400; }
+.t3m-note { padding: 0 1rem; font-size: 0.8rem; }
+
+.t3m-group {
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: var(--radius-xl, 0.75rem);
+  background: color-mix(in srgb, var(--card) 40%, transparent);
+  color: var(--card-foreground, var(--foreground));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
-.t3m-mod[data-status="disabled"] > :not(header) { opacity: 0.7; }
-.t3m-mod-head { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
-.t3m-mod-title { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
-.t3m-result-card { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
-.t3m-badge[data-danger] { color: var(--destructive); border-color: color-mix(in srgb, var(--destructive) 50%, transparent); }
-.t3m-meta { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.8rem; }
+.t3m-group > * + * { border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.t3m-item { padding: 0.75rem 1rem; }
+.t3m-item.t3m-row > .t3m-input { flex: 1 1 12rem; }
+
+/* One mod: title and control on top, text below, meta and actions at the foot. */
+.t3m-entry { display: flex; flex-direction: column; gap: 0.4rem; }
+.t3m-entry-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; min-height: 1.75rem; }
+.t3m-entry-head > :last-child:not(.t3m-entry-title) { flex-shrink: 0; }
+.t3m-entry-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+.t3m-entry-title h3 { color: var(--foreground); }
+.t3m-entry-title .t3m-muted { font-size: 0.8rem; }
+.t3m-entry-title .t3m-badge { align-self: center; }
+.t3m-desc { color: var(--muted-foreground); line-height: 1.45; }
+.t3m-entry-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.25rem 1rem; }
+.t3m-entry-foot .t3m-actions { margin: 0 -0.4rem 0 auto; gap: 0.125rem; }
+.t3m-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; font-size: 0.75rem; }
+.t3m-mod[data-status="disabled"] > :not(header) { opacity: 0.6; }
+.t3m-mod[data-status="disabled"] .t3m-entry-title h3 { color: var(--muted-foreground); }
+.t3m-problems { padding-left: 1rem; list-style: disc; font-size: 0.8rem; }
+.t3m-warning { color: var(--destructive); font-size: 0.75rem; }
 
 .t3m-badge {
-  padding: 0 0.4rem;
+  display: inline-block;
+  padding: 0 0.45rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 0.72rem;
-  line-height: 1.3rem;
+  font-size: 0.7rem;
+  line-height: 1.15rem;
+  white-space: nowrap;
   color: var(--muted-foreground);
 }
 .t3m-badge[data-status="ok"] { color: var(--foreground); }
+.t3m-badge[data-danger],
 .t3m-badge[data-status="degraded"],
 .t3m-badge[data-status="find-missing"],
 .t3m-badge[data-status="find-ambiguous"],
@@ -54,25 +88,28 @@
 
 .t3m-banner {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem 1rem;
   padding: 0.7rem 1rem;
   border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 50%, transparent);
-  border-radius: var(--radius-lg, 0.6rem);
+  border-radius: var(--radius-xl, 0.75rem);
   background: color-mix(in srgb, var(--color-warning, #d97706) 10%, transparent);
 }
+.t3m-banner > span { flex: 1 1 16rem; }
 
 .t3m-drop {
+  margin: 0.75rem 1rem;
   padding: 1rem;
   border: 1px dashed var(--border);
-  border-radius: var(--radius-md, 0.45rem);
+  border-radius: var(--radius-lg, 0.6rem);
   text-align: center;
   color: var(--muted-foreground);
 }
+.t3m-group > .t3m-drop + * { border-top: 0; padding-top: 0; }
 .t3m-drop[data-over] { border-color: var(--foreground); color: var(--foreground); }
 .t3m-link { text-decoration: underline; cursor: pointer; color: var(--foreground); }
-.t3m-row .t3m-input { flex: 1; min-width: 12rem; }
 .t3m-input {
   box-sizing: border-box;
   height: 2rem;
@@ -83,27 +120,34 @@
   color: inherit;
 }
 .t3m-mono, .t3m-page code, .t3m-diff { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.78rem; }
+.t3m-page code { overflow-wrap: anywhere; }
 
-.t3m-setting {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--border);
-}
-.t3m-section { flex-direction: column; align-items: stretch; }
+/* A mod's own settings, inset under its description. */
+.t3m-settings { display: flex; flex-direction: column; margin: 0.25rem 0; border: 1px solid color-mix(in srgb, var(--border) 50%, transparent); border-radius: var(--radius-lg, 0.6rem); }
+.t3m-settings > * + * { border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.t3m-setting { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.75rem; }
+.t3m-setting > :last-child:not(.t3m-setting-text) { flex-shrink: 0; }
+.t3m-setting-text { display: flex; flex-direction: column; gap: 0.15rem; }
+.t3m-setting-text .t3m-muted { font-size: 0.8rem; }
+.t3m-setting-custom { flex-direction: column; align-items: stretch; }
 
-.t3m-details > summary { cursor: pointer; color: var(--muted-foreground); font-size: 0.8rem; }
-.t3m-details > summary h2 { display: inline; color: var(--foreground); font-size: 0.95rem; }
+.t3m-details > summary { cursor: pointer; width: fit-content; color: var(--muted-foreground); font-size: 0.75rem; }
+.t3m-details > summary:hover { color: var(--foreground); }
 .t3m-patches { margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; }
 
-.t3m-helper { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; align-items: end; }
+.t3m-helper-card > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; cursor: pointer; list-style: none; }
+.t3m-helper-card > summary::-webkit-details-marker { display: none; }
+.t3m-helper-card > summary::before { content: "▸"; color: var(--muted-foreground); }
+.t3m-helper-card[open] > summary::before { content: "▾"; }
+.t3m-helper-card > summary .t3m-muted { font-size: 0.8rem; }
+.t3m-stack { display: flex; flex-direction: column; gap: 0.6rem; }
+.t3m-helper { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.5rem; align-items: end; }
+.t3m-helper > button { justify-self: end; }
 .t3m-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--muted-foreground); }
 .t3m-check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.8rem; }
 .t3m-result { display: flex; flex-direction: column; gap: 0.3rem; }
 .t3m-diff {
-  overflow-x: auto;
+  overflow: auto;
   max-height: 16rem;
   padding: 0.6rem;
   border-radius: var(--radius-md, 0.45rem);
@@ -132,5 +176,4 @@
 .t3m-icon[data-tone="bad"] .t3m-dot { background: var(--destructive, #dc2626); }
 
 .t3m-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: rgb(0 0 0 / 0.4); }
-.t3m-overlay-panel { position: relative; width: min(56rem, 94vw); max-height: 90vh; overflow: auto; border-radius: 0.75rem; background: var(--background); }
-.t3m-overlay-panel .t3m-close { position: absolute; top: 1rem; right: 1rem; }
+.t3m-overlay-panel { width: min(56rem, 94vw); max-height: 90vh; overflow: auto; border-radius: 0.75rem; background: var(--background); }

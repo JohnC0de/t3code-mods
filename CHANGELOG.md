@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Mods page scrolls and follows the app's settings layout.** The settings route gave the page
+  no scroll container, so everything below the window was cut off. The page now brings the
+  app's own scroller and top fade, a 56rem column and labelled sections over grouped cards:
+  Installed first, then Browse, Install and Developer (Patch Helper). Long names, descriptions
+  and patch errors wrap instead of running out of their cards, and rows reflow at narrow widths.
 - **New mod `html-path`:** T3's `html_preview` and `html_render` tools take `path`, the absolute
   path of an `.html` file, as well as `html`. The backend reads the file, so an agent no longer
   pastes the page as tool input (a 17 KB page was about 4,000 tokens and 40 s of output).
