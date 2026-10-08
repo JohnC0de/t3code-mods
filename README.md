@@ -109,6 +109,7 @@ Ask questions and propose ideas in [Discussions](https://github.com/JohnC0de/t3c
 | [`clean-tools`](mods/clean-tools) | Quieter tool rows: monospace commands, dimmed thinking, failed calls in red. | `t3mods add clean-tools` |
 | [`agent-inbox`](mods/agent-inbox) | An edge strip and a keyboard inbox for agent threads that work, wait for you, finish or fail. | Not on the registry yet: `t3mods pack mods/agent-inbox`, then `t3mods add` the zip. |
 | [`find-in-thread`](mods/find-in-thread) | Ctrl+F finds and highlights text in the open thread, also in messages scrolled out of view. | Not on the registry yet: `t3mods pack mods/find-in-thread`, then `t3mods add` the zip. |
+| [`html-path`](mods/html-path) | `html_preview` and `html_render` take the path of an `.html` file, so agents stop pasting whole pages as tool input. | Not on the registry yet: `t3mods pack mods/html-path`, then `t3mods add` the zip. |
 | [`app-badge`](mods/app-badge) | Tells your T3 Code apps apart when you run more than one: a window title and, on Windows, a taskbar badge. | Not on the registry yet: `t3mods pack mods/app-badge`, then `t3mods add` the zip. |
 
 ## Contribute

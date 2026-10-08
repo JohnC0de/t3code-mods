@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **New mod `html-path`:** T3's `html_preview` and `html_render` tools take `path`, the absolute
+  path of an `.html` file, as well as `html`. The backend reads the file, so an agent no longer
+  pastes the page as tool input (a 17 KB page was about 4,000 tokens and 40 s of output).
 - **`main.cjs` hot-reloads** (loader 0.4.0) when it returns a cleanup function or a `dispose`
   method. A save of `main.cjs`, of a file it required, or of an `.mjs` file in the mod folder
   runs the cleanup and loads it again; turning the mod off stops it, turning it on or

@@ -1,0 +1,12 @@
+{
+  "id": "html-path",
+  "name": "HTML from a file",
+  "version": "1.0.0",
+  "description": "T3's html_preview and html_render tools take path: the absolute path of an .html file. The agent passes the file instead of pasting the page, which saves its tokens and time. Restart the app to apply.",
+  "tags": [
+    "agents",
+    "html"
+  ],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}
