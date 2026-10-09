@@ -114,6 +114,26 @@ await step("renderer edit hot-reloads in place", async () => {
   console.log(`     hot update took ${ms} ms in the renderer`);
 });
 
+await step("two overlapping hot updates start a mod once", async () => {
+  const dir = path.join(modsDir, "e2e-css");
+  const source = (v) =>
+    `export const v = ${v}; export default (api) => { window.__e2eLive = (window.__e2eLive ?? 0) + 1; api.lifecycle.own(() => { window.__e2eLive -= 1; }); };`;
+  fs.writeFileSync(path.join(dir, "renderer.js"), source(3));
+  await until("renderer v3", `window.__t3mods.exports['e2e-css'].v===3 && window.__e2eLive===1`);
+  // An install writes files in batches, so a second update can arrive while the first one still
+  // loads the new renderer.js (here a top-level wait makes the load slow). The second update
+  // stopped that load, and the load then started anyway: two live copies.
+  fs.writeFileSync(path.join(dir, "renderer.js"), `await new Promise((r) => setTimeout(r, 400)); ${source(4)}`);
+  await evaluate(`(async () => {
+    while (window.__e2eLive !== 0) await new Promise((r) => setTimeout(r, 5)); // the watcher's update stopped v3
+    await window.__t3mods.hotUpdate({ files: ['e2e-css/renderer.js'], ids: ['e2e-css'] });
+  })()`);
+  await until("renderer v4", `window.__t3mods.exports['e2e-css'].v===4`);
+  await new Promise((r) => setTimeout(r, 1500)); // the watcher's own update for the write
+  const live = await evaluate("window.__e2eLive");
+  assert(live === 1, `live copies after overlapping updates: ${live}`);
+});
+
 await step("disable and enable through the manager API", async () => {
   await api("toggle", { id: "e2e-css", enabled: false });
   await until("unloaded", `!${loaded("e2e-css")} && getComputedStyle(document.body).getPropertyValue('--e2e-css').trim()===''`);

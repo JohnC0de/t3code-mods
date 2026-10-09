@@ -31,16 +31,26 @@ html:is([data-t3mod-calm="focus"], [data-t3mod-calm="normal"]) [data-timeline-ro
 
 /* ---------- readable width ---------- */
 
-/* Prose wraps at about 70 characters; code blocks and tables keep the full width. */
-html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
-  max-width: 72ch;
+/* The whole answer (prose, code, tables) wraps at about 75 characters, so it stays one block. */
+html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown {
+  max-width: 75ch;
 }
 
 /* ---------- turn titles ---------- */
 
+/* Spacing is padding on the row, never a margin on its child: the list measures the row's
+   box, a child's margin collapses out of it, and the next row would overlap. */
 [data-timeline-row-kind="calm-title"],
 [data-timeline-row-kind="calm-brief"] {
+  padding-top: 0 !important;
   padding-bottom: 0 !important;
+}
+[data-timeline-row-kind="calm-title"]:has(.t3mod-calm-title[data-open]) {
+  padding-top: 0.75rem !important;
+}
+[data-timeline-row-kind="calm-brief"] {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.5rem !important;
 }
 
 .t3mod-calm-title {
@@ -68,18 +78,18 @@ html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is
   outline-offset: -2px;
 }
 
-/* A folded turn steps back until you point at it. */
-.t3mod-calm-title:not([data-open]) {
-  opacity: 0.6;
-  transition: opacity 120ms;
+/* A folded turn steps back until you point at it. Color, not opacity, so the needs mark
+   keeps full contrast. */
+.t3mod-calm-title:not([data-open]) .t3mod-calm-text {
+  color: var(--t3mod-calm-dim);
+  transition: color 120ms;
 }
-.t3mod-calm-title:not([data-open]):is(:hover, :focus-visible) {
-  opacity: 1;
+.t3mod-calm-title:not([data-open]):is(:hover, :focus-visible) .t3mod-calm-text {
+  color: var(--foreground);
 }
 
-/* An open turn's title heads its block, with room above it. */
+/* An open turn's title heads its block. */
 .t3mod-calm-title[data-open] {
-  margin-top: 0.75rem;
   font-weight: 500;
 }
 
@@ -118,9 +128,10 @@ html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is
   font-weight: 500;
   line-height: 1.35rem;
 }
+/* Themes differ in --primary (some are near gray), so the mark uses a fixed amber tint. */
 .t3mod-calm-needs {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: color-mix(in oklab, #f5a524 85%, var(--foreground));
+  background: color-mix(in oklab, #f5a524 14%, transparent);
 }
 .t3mod-calm-failed {
   color: var(--destructive, #e5484d);
@@ -130,7 +141,6 @@ html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is
 /* ---------- since you left ---------- */
 
 .t3mod-calm-brief {
-  margin: 0.75rem 0 0.5rem;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 0.6rem;
@@ -168,7 +178,7 @@ html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is
   font-weight: 500;
 }
 .t3mod-calm-line-needs span {
-  color: var(--primary);
+  color: color-mix(in oklab, #f5a524 85%, var(--foreground));
 }
 .t3mod-calm-line-failed span {
   color: var(--destructive, #e5484d);

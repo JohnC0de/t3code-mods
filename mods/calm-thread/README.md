@@ -16,8 +16,10 @@ its duration. Click a title to open the turn: your prompt, a one-line receipt of
   folds the real answer away. Calm thread shows it again above the note.
 - **Since you left.** When you open a thread after 10 minutes or more away, a card at the end
   lists what finished, what waits on you, what still runs and what failed. **Dismiss** hides it.
-- **Readable width.** Answers wrap at about 70 characters. Code blocks and tables keep the full
-  width.
+- **Readable width** (off by default, so T3's Chat width setting or the wide-chat mod decides).
+  When on, the whole answer, code and tables included, wraps at about 75 characters.
+- **Find in thread.** While the find-in-thread bar (Ctrl+F) is open, Focus opens every turn, so
+  text in folded turns can be found.
 - **Quiet live rows.** No shimmer on the live tool row, and no clock that ticks every second.
   Full density keeps T3's clock.
 

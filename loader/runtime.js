@@ -391,7 +391,16 @@ async function callRenderer(id, method, args) {
 const warned = new Set();
 function makeApi(mod, entry) {
   const { id } = mod;
-  const own = (fn) => (entry.disposers.push(fn), fn);
+  // After the mod stopped (a hot reload can stop it while it still starts), cleanups run at once,
+  // so a slot or listener that a late start adds never outlives the mod.
+  const own = (fn) => {
+    if (entry.controller.signal.aborted) {
+      Promise.resolve()
+        .then(fn)
+        .catch((e) => console.error(`[t3mods] dispose failed for ${id}`, e));
+    } else entry.disposers.push(fn);
+    return fn;
+  };
   const lifecycle = {
     signal: entry.controller.signal,
     own,
@@ -530,6 +539,8 @@ async function load(mod, version) {
     }
     if (mod.files.renderer) {
       const module = await import(`${base}/renderer.js`);
+      // A newer hot update stopped this load while the module loaded: that update starts it.
+      if (entry.controller.signal.aborted) return;
       const { default: start, ...named } = module;
       Object.assign((exportsById[mod.id] ??= {}), named);
       const cleanup = await start?.(api);
@@ -550,8 +561,16 @@ async function boot() {
   await Promise.all(index.mods.filter(runnable).map((m) => load(m, index.version)));
 }
 
-// Called by the main process after a debounced fs.watch batch.
-async function hotUpdate({ files, ids }) {
+// Called by the main process after a debounced fs.watch batch. Updates run one at a time: two
+// overlapping updates could start a mod twice (two slot copies, two listeners).
+let hotQueue = Promise.resolve();
+function hotUpdate(batch) {
+  const run = hotQueue.then(() => applyHotUpdate(batch));
+  hotQueue = run.catch((e) => console.error("[t3mods] hot update failed", e));
+  return run;
+}
+
+async function applyHotUpdate({ files, ids }) {
   const t0 = performance.now();
   await refreshIndex();
   const changed = new Set(ids);

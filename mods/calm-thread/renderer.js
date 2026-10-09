@@ -58,7 +58,8 @@ export default (api) => {
   // Off by default: it sends prompts and answers to the endpoint set below.
   const model = api.state.boolean("modelTitles", false);
   const brief = api.state.boolean("sinceYouLeft", true);
-  const width = api.state.boolean("readableWidth", true);
+  // Off by default: T3's own Chat width setting decides, unless you want a narrower answer.
+  const width = api.state.boolean("readableWidth", false);
   const modelUrl = api.state.string("modelUrl", "");
   const keyFile = api.state.string("keyFile", "");
   const modelName = api.state.string("model", "");
@@ -78,6 +79,16 @@ export default (api) => {
   const synthetic = new Map();
 
   const bump = () => store.bump();
+
+  // The find-in-thread mod searches the rows on the list; a folded turn has none.
+  let findOpen = false;
+  const checkFind = () => {
+    const open = document.querySelector(".t3mod-find") !== null;
+    if (open === findOpen) return;
+    findOpen = open;
+    bump();
+  };
+  api.lifecycle.observe(document.body, { childList: true, subtree: true }, checkFind);
 
   api.threads
     .ready()
@@ -165,7 +176,8 @@ export default (api) => {
       }
       const threadId = threadIdOf(ctx.threadKey);
       const view = {
-        mode: mode.get(),
+        // While the find-in-thread bar is open, every turn opens so its text can be found.
+        mode: findOpen && mode.get() === "focus" ? "normal" : mode.get(),
         overrides: overrides.get(ctx.threadKey),
         titles,
         needsYou: needsYou(threadId),
@@ -256,7 +268,6 @@ export default (api) => {
         "data-open": row.open ? "" : undefined,
         "data-from-prompt": row.fromPrompt ? "" : undefined,
         "aria-expanded": row.open,
-        title: row.open ? "Fold this turn" : "Open this turn",
         onClick: () => toggleTurn(row.threadKey, row.turnId, row.open),
       },
       h("span", { className: "t3mod-calm-chevron", "aria-hidden": true }, row.open ? "▾" : "▸"),
@@ -322,7 +333,7 @@ export default (api) => {
   });
   api.settings.toggle({ title: "Model titles", description: "When an answer's first sentence makes a poor title, a small model writes one. It also names what the latest answer waits on.", value: model });
   api.settings.toggle({ title: "Since you left", description: "After 10 minutes away, a card at the end of the thread lists what finished and what waits on you.", value: brief });
-  api.settings.toggle({ title: "Readable width", description: "Answers wrap at about 70 characters. Code and tables keep the full width.", value: width });
+  api.settings.toggle({ title: "Readable width", description: "Answers wrap at about 75 characters, code and tables included, whatever T3's Chat width is.", value: width });
   api.settings.section({
     title: "Model endpoint",
     component: function Endpoint() {
