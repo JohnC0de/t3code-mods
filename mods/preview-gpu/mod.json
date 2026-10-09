@@ -1,8 +1,8 @@
 {
   "id": "preview-gpu",
   "name": "Preview on the GPU",
-  "version": "1.0.0",
-  "description": "T3's preview browser draws pages on the graphics card instead of the CPU, on Windows. A WebGL or three.js page in an agent's preview tab no longer takes every CPU core. Restart the app to apply.",
+  "version": "1.1.0",
+  "description": "T3's preview browser and html_preview renderer draw pages on the graphics card instead of the CPU, on Windows. A WebGL or three.js page in an agent's preview tab no longer takes every CPU core. Restart the app to apply.",
   "tags": [
     "agents",
     "preview",

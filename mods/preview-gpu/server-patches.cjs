@@ -6,7 +6,8 @@
 // Other platforms keep --disable-gpu; they are untested. Without a usable GPU, Chrome falls
 // back to software drawing, as before.
 //
-// The html_preview / html_render renderer is a separate short-lived browser and stays as it is.
+// The html_preview / html_render renderer is a second browser with its own --disable-gpu; it gets
+// the same flag, so canvas and WebGL in a rendered page draw on the GPU too.
 const GPU_FLAG = `(process.platform === "win32" ? "--use-angle=d3d11" : "--disable-gpu")`;
 
 /** @type {import("../../loader/types/t3mods").ServerPatch[]} */
@@ -18,6 +19,16 @@ module.exports = [
       {
         match: /args: \["--disable-gpu", "--force-device-scale-factor=2"\]/,
         replace: () => `args: [${GPU_FLAG}, "--force-device-scale-factor=2"]`,
+      },
+    ],
+  },
+  {
+    id: "html-render-gpu",
+    find: '"--block-new-web-contents"',
+    replace: [
+      {
+        match: /"--no-default-browser-check",(\s*)"--disable-gpu",(\s*)"--hide-scrollbars",/,
+        replace: (_, a, b) => `"--no-default-browser-check",${a}${GPU_FLAG},${b}"--hide-scrollbars",`,
       },
     ],
   },

@@ -5,7 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const P = require("../loader/patcher.cjs");
 
-const [patch] = P.normalize("preview-gpu", require(path.join(__dirname, "..", "mods", "preview-gpu", "server-patches.cjs")));
+const [patch, htmlPatch] = P.normalize("preview-gpu", require(path.join(__dirname, "..", "mods", "preview-gpu", "server-patches.cjs")));
 const FIXTURE = `const options = {
 			executablePath,
 			env,
@@ -35,4 +35,24 @@ test("a build whose args changed fails the patch instead of half-applying", () =
   const r = P.applyPatch(patch, changed);
   assert.equal(r.ok, false);
   assert.equal(r.text, changed);
+});
+
+const HTML_FIXTURE = `const argv = [
+		"--headless=new",
+		"--remote-debugging-pipe",
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--disable-gpu",
+		"--hide-scrollbars",
+		"--block-new-web-contents"
+	];`;
+
+test("the html_preview renderer gets the same flag per platform", () => {
+  const r = P.applyPatch(htmlPatch, HTML_FIXTURE);
+  assert.equal(r.ok, true, r.error);
+  const argv = (platform) => [...vm.runInNewContext(`${r.text}
+argv`, { process: { platform } })];
+  assert.deepEqual(argv("win32").slice(3, 6), ["--no-default-browser-check", "--use-angle=d3d11", "--hide-scrollbars"]);
+  assert.ok(argv("linux").includes("--disable-gpu"));
+  assert.ok(!argv("win32").includes("--disable-gpu"));
 });

@@ -16,7 +16,7 @@ card. Measured with T3's own headless shell (Chrome 154) and a full-screen WebGL
 Screenshots, recordings and the live view work as before. A machine without a usable GPU falls
 back to software drawing, as before. Other platforms keep `--disable-gpu`.
 
-The html_preview / html_render renderer is a separate, short-lived browser and is not changed.
+The html_preview / html_render renderer, a second headless browser, gets the same flag.
 
 Restart T3 Code to apply. The mod patches the backend's code at load time, so a T3 Code update
 can break it; `t3mods doctor` shows the state.
