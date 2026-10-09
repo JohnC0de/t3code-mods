@@ -1,0 +1,10 @@
+{
+  "id": "calm-thread",
+  "name": "Calm thread",
+  "version": "0.1.0",
+  "description": "Finished turns read as one-line titles. Open one for its prompt, a one-line work receipt and the answer. Focus, Normal and Full density on Alt+D, and a 'Since you left' card.",
+  "tags": ["timeline", "ui", "focus"],
+  "requires": ["core/timeline-row"],
+  "repository": "https://github.com/JohnC0de/t3code-mods",
+  "license": "MIT"
+}

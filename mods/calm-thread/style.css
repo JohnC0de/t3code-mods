@@ -1,0 +1,250 @@
+/* Calm thread. The rows that renderer.js adds (kinds calm-title and calm-brief) draw through the
+   timeline-row slot; T3 gives unknown kinds its default bottom padding, which these rules
+   replace. Anchors: data-timeline-row-kind, data-message-role (stable across builds). */
+
+:root {
+  --t3mod-calm-dim: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
+  --t3mod-calm-hover: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+/* ---------- quiet live rows (all densities but Full) ---------- */
+
+/* No shimmer sweep over the live tool label or "Thinking". */
+html:is([data-t3mod-calm="focus"], [data-t3mod-calm="normal"]) .live-tool-shine {
+  animation: none !important;
+  background: none !important;
+  color: inherit !important;
+}
+html:is([data-t3mod-calm="focus"], [data-t3mod-calm="normal"]) .live-activity-focus {
+  display: none !important;
+}
+
+/* "Working for 21m 30s" ticks every second; it reads "Working" instead. The receipt gives
+   the time once the turn ends. */
+html:is([data-t3mod-calm="focus"], [data-t3mod-calm="normal"]) [data-timeline-row-kind="working"] span:has(> span.tabular-nums) {
+  font-size: 0;
+}
+html:is([data-t3mod-calm="focus"], [data-t3mod-calm="normal"]) [data-timeline-row-kind="working"] span:has(> span.tabular-nums)::before {
+  content: "Working";
+  font-size: 0.875rem;
+}
+
+/* ---------- readable width ---------- */
+
+/* Prose wraps at about 70 characters; code blocks and tables keep the full width. */
+html[data-t3mod-calm-width] [data-message-role="assistant"] .chat-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: 72ch;
+}
+
+/* ---------- turn titles ---------- */
+
+[data-timeline-row-kind="calm-title"],
+[data-timeline-row-kind="calm-brief"] {
+  padding-bottom: 0 !important;
+}
+
+.t3mod-calm-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0.3rem 0.25rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+.t3mod-calm-title:hover {
+  background: var(--t3mod-calm-hover);
+}
+.t3mod-calm-title:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* A folded turn steps back until you point at it. */
+.t3mod-calm-title:not([data-open]) {
+  opacity: 0.6;
+  transition: opacity 120ms;
+}
+.t3mod-calm-title:not([data-open]):is(:hover, :focus-visible) {
+  opacity: 1;
+}
+
+/* An open turn's title heads its block, with room above it. */
+.t3mod-calm-title[data-open] {
+  margin-top: 0.75rem;
+  font-weight: 500;
+}
+
+.t3mod-calm-chevron {
+  flex: none;
+  width: 0.75rem;
+  color: var(--t3mod-calm-dim);
+  font-size: 0.7rem;
+}
+.t3mod-calm-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.t3mod-calm-title[data-from-prompt] .t3mod-calm-text {
+  font-style: italic;
+  color: var(--t3mod-calm-dim);
+}
+.t3mod-calm-meta {
+  flex: none;
+  margin-inline-start: auto;
+  padding-inline-start: 0.75rem;
+  color: var(--t3mod-calm-dim);
+  font-size: 0.75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.t3mod-calm-needs,
+.t3mod-calm-failed {
+  flex: none;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.35rem;
+}
+.t3mod-calm-needs {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.t3mod-calm-failed {
+  color: var(--destructive, #e5484d);
+  background: color-mix(in srgb, var(--destructive, #e5484d) 12%, transparent);
+}
+
+/* ---------- since you left ---------- */
+
+.t3mod-calm-brief {
+  margin: 0.75rem 0 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: color-mix(in oklab, var(--foreground) 2%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.t3mod-calm-brief header {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+  color: var(--t3mod-calm-dim);
+  font-size: 0.75rem;
+}
+.t3mod-calm-brief header button {
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--t3mod-calm-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.t3mod-calm-brief header button:hover {
+  color: var(--foreground);
+}
+.t3mod-calm-line {
+  display: flex;
+  gap: 0.6rem;
+}
+.t3mod-calm-line b {
+  flex: none;
+  width: 5.5rem;
+  color: var(--t3mod-calm-dim);
+  font-weight: 500;
+}
+.t3mod-calm-line-needs span {
+  color: var(--primary);
+}
+.t3mod-calm-line-failed span {
+  color: var(--destructive, #e5484d);
+}
+
+/* ---------- density toast and settings ---------- */
+
+.t3mod-calm-toast {
+  position: fixed;
+  left: 50%;
+  top: 3.25rem;
+  z-index: 60;
+  translate: -50% 0;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--popover, var(--background));
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+
+.t3mod-calm-seg {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.t3mod-calm-seg button {
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.t3mod-calm-seg button[aria-checked="true"] {
+  color: var(--foreground);
+  background: var(--t3mod-calm-hover);
+  border-color: var(--ring);
+}
+.t3mod-calm-hint {
+  margin-inline-start: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.t3mod-calm-fields {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+.t3mod-calm-field {
+  display: grid;
+  grid-template-columns: 5rem minmax(16rem, 28rem);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.t3mod-calm-field input {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+}
+.t3mod-calm-fields > button {
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
