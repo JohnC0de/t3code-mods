@@ -146,11 +146,18 @@ export function segmentTurns(rows, { isWorking = false, latestRun = null } = {})
     }
   }
   const last = turns.at(-1);
+  // A run that ended (failed, stopped) gets no fold, so "no answer and no fold" alone is not running.
+  const ended = latestRun?.status === "failed" || latestRun?.status === "interrupted";
+  if (last && latestRun?.status === "failed" && !last.live && !isWorking) last.failed = true;
   for (const t of turns) {
-    t.running = t.live || (t === last && isWorking) || (t === last && !t.answer && !t.fold);
-    t.finishedAt = t.answer ? (t.answer.message.updatedAt ?? t.answer.createdAt) : null;
+    t.running = t.live || (t === last && isWorking) || (t === last && !t.answer && !t.fold && !t.failed && !ended);
+    // A turn that ended without an answer (failed, stopped) ends at its last dated row.
+    t.finishedAt = t.answer
+      ? (t.answer.message.updatedAt ?? t.answer.createdAt)
+      : t.running
+        ? null
+        : (t.rows.findLast((r) => r.createdAt)?.createdAt ?? null);
   }
-  if (last && latestRun?.status === "failed" && !last.running) last.failed = true;
   return { pre, turns };
 }
 
@@ -249,8 +256,9 @@ export function calmRows(rows, ctx, view) {
       at: turn.finishedAt,
     });
     if (view.since && turn.finishedAt && turn.finishedAt > view.since) {
-      brief.done.push(title.text);
+      // A turn you stopped has no news; a failed one goes under Failed only.
       if (turn.failed) brief.failed.push(title.text);
+      else if (turn.answer) brief.done.push(title.text);
       if (needs) brief.needs = needs;
     }
     if (!open) continue;
@@ -268,7 +276,7 @@ export function calmRows(rows, ctx, view) {
     }
   }
 
-  if (view.brief && !view.dismissed && view.since && brief.done.length) {
+  if (view.brief && !view.dismissed && view.since && (brief.done.length || brief.failed.length)) {
     out.push({
       kind: "calm-brief",
       id: "calm-brief",

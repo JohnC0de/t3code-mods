@@ -519,7 +519,8 @@ test("brief: appended last, lists titles finished after since, failures, latest 
   assert.equal(last.kind, "calm-brief");
   assert.equal(last.id, "calm-brief");
   assert.equal(last.since, since);
-  assert.deepEqual(last.done, ["Fixed issue number 2 in setup", "Fixed issue number 3 in setup"]);
+  // A failed turn is listed under Failed only, not also under Done.
+  assert.deepEqual(last.done, ["Fixed issue number 3 in setup"]);
   assert.deepEqual(last.failed, ["Fixed issue number 2 in setup"]);
   assert.equal(last.needs, "Approve the plan");
   assert.equal(last.running, "Now refactor the parser");
@@ -571,10 +572,10 @@ test("title row for a turn with no answer uses the prompt's first sentence and f
   assert.equal(title.kind, "calm-title");
   assert.equal(title.title, "Rename the helper in logic.mjs");
   assert.equal(title.fromPrompt, true);
-  assert.equal(title.at, null);
+  assert.equal(title.at, T0, "a stopped turn ends at its last dated row (here the prompt)");
   assert.equal(title.duration, "3m");
   assert.equal(out.wants.length, 0);
-  // never part of a brief: it has no finish time
+  // a turn you stopped is no news: never part of a brief
   assert.equal(L.calmRows(rows, ctx(), view({ since: hour(1) })).rows.some((r) => r.kind === "calm-brief"), false);
 });
 
@@ -603,4 +604,28 @@ test("every fold in a turn with two runs gets its own receipt", () => {
   const view = { mode: "normal", titles: new Map(), needsYou: null, since: null, brief: false, dismissed: false, model: false };
   const { rows: out } = L.calmRows(rows, { threadKey: "e:t", entries, isWorking: false }, view);
   assert.deepEqual(out.filter((r) => r.kind === "turn-fold").map((r) => r.label), ["2 commands · 3m", "1 edit · 1m"]);
+});
+
+test("a last turn that failed before any answer is finished and failed, not running", () => {
+  const user = { kind: "message", id: "u1", createdAt: "2026-10-08T10:00:00Z", message: { id: "u1", role: "user", text: "Benchmark the checkers.", runId: null, streaming: false, createdAt: "2026-10-08T10:00:00Z" } };
+  const toggle = { kind: "work-toggle", id: "wt1", hasFailure: false };
+  const work = { kind: "work", id: "w1", groupedEntries: [{ tone: "tool" }], isExpandedToolGroup: false };
+  const err = { kind: "event", id: "e1", createdAt: "2026-10-08T10:01:00Z", projectedItem: { item: { type: "system_notice", runId: "r1" } } };
+  const view = { mode: "focus", titles: new Map(), needsYou: null, since: "2026-10-08T09:00:00Z", brief: true, dismissed: false, model: false };
+  for (const status of ["failed", "interrupted"]) {
+    const ctx = { threadKey: "e:t", entries: [], isWorking: false, latestRun: { runId: "r1", status } };
+    const { turns } = L.segmentTurns([user, toggle, work, err], ctx);
+    assert.equal(turns[0].running, false, status);
+    assert.equal(turns[0].failed, status === "failed");
+    const { rows } = L.calmRows([user, toggle, work, err], ctx, view);
+    const title = rows.find((r) => r.kind === "calm-title");
+    assert.ok(title, `${status}: the turn has a title row`);
+    assert.equal(title.open, true, `${status}: the latest finished turn is open, so its work stays visible`);
+    assert.deepEqual(rows.filter((r) => r.kind !== "calm-title" && r.kind !== "calm-brief").map((r) => r.id), ["u1", "wt1", "w1", "e1"]);
+    const brief = rows.find((r) => r.kind === "calm-brief");
+    assert.deepEqual(brief?.failed ?? [], status === "failed" ? ["Benchmark the checkers"] : [], `${status}: the card lists a failure`);
+  }
+  // Still running while T3 works, even with no answer yet.
+  const working = L.segmentTurns([user, toggle], { isWorking: true, latestRun: { runId: "r1", status: "running" } });
+  assert.equal(working.turns[0].running, true);
 });
