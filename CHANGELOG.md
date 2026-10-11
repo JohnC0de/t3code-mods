@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **New mod `no-dead-taskkill`:** on Windows, T3's backend no longer runs `taskkill /T /F` for a
+  git or gh child that already exited with a non-zero code (two runs per failure, 97% exit 128,
+  about 25 per minute). Live children that time out or get interrupted still get the tree kill.
 - **New mod `working-bg-commands`:** with the Working section on, a thread whose agent ended its
   turn while a background command still runs stays in Working instead of dropping into the
   inbox. T3 counts only subagents and monitors there (#14872), so an agent that waits on a
