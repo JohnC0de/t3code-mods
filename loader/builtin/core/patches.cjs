@@ -59,22 +59,33 @@ module.exports = [
   },
   {
     // Settings: a "Mods" section at /settings/mods that renders the "settings-mods" slot.
-    // Three edits in the main chunk: nav label, nav icon, and a route in the settings tree.
+    // The route goes into the settings tree. Since 0.1.3 the route tree, the nav labels and
+    // the nav icons live in three chunks, so the nav entry is a second patch (settings-nav).
+    // Older builds name the route `/settings/archived`, newer ones `/_chat/settings/archived`.
     id: "settings-page",
     optional: true,
-    find: '"/settings/archived":`Archive`}',
-    group: true,
-    replace: [
-      { match: /"\/settings\/archived":`Archive`\}/, replace: '"/settings/archived":`Archive`,"/settings/mods":`Mods`}' },
-      { match: /("\/settings\/archived":\i)\}(,\i=Object\.keys\()/, replace: '$1,"/settings/mods":$self.ModsIcon}$2' },
-    ],
+    find: "update({id:`/archived`,path:`/archived`,getParentRoute:",
     transform(text, { self }) {
-      const create = text.match(re(/(\i)\(`\/settings\/archived`\)\(\{component:/));
+      const create = text.match(re(/(\i)\(`(\/[\w/]*?)settings\/archived`\)\(\{component:/));
       const parent = text.match(re(/\.update\(\{id:`\/archived`,path:`\/archived`,getParentRoute:\(\)=>(\i)\}\)/));
       if (!create || !parent) return text;
-      const route = `T3ModsRoute:${create[1]}(\`/settings/mods\`)({component:${self}.SettingsPage}).update({id:\`/mods\`,path:\`/mods\`,getParentRoute:()=>${parent[1]}}),`;
+      const route = `T3ModsRoute:${create[1]}(\`${create[2]}settings/mods\`)({component:${self}.SettingsPage}).update({id:\`/mods\`,path:\`/mods\`,getParentRoute:()=>${parent[1]}}),`;
       return text.replace(re(/SettingsArchivedRoute:\i,/), (m) => m + route);
     },
+  },
+  {
+    // Settings nav: the "Mods" entry. The nav lists the keys of the label map with the icon
+    // map's icon. Both edits sit in the chunk that builds the nav, so a label never shows
+    // without its icon. Object.assign adds the label to the shared label map in place.
+    id: "settings-nav",
+    optional: true,
+    find: /"\/settings\/archived":[A-Za-z_$][\w$]*\},[A-Za-z_$][\w$]*=Object\.keys\(/,
+    replace: [
+      {
+        match: /("\/settings\/archived":\i)\}(,\i=Object\.keys\()(\i)\)/,
+        replace: '$1,"/settings/mods":$self.ModsIcon}$2Object.assign($3,{"/settings/mods":`Mods`}))',
+      },
+    ],
   },
   {
     // Thread state and thread commands for api.threads. The app keeps them in one atom
@@ -87,7 +98,8 @@ module.exports = [
     transform(text, { self }) {
       const stores = text.match(re(/(\i)=\i\((\i)\.stateAtom\),(\i)=\i\(\{catalogValueAtom:\i\.catalogValueAtom,snapshotAtom:(\i)\.snapshotAtom\}\)/));
       const registry = text.match(re(/function \i\(\)\{return (\i)\.get\(\i\.threadShellsAtom\)\}/));
-      const projects = text.match(re(/(\i)=\i\(\{catalogValueAtom:\i\.catalogValueAtom,snapshotAtom:\i\}\)/));
+      // Newer builds pass more atoms to the project store, e.g. serverConfigValueAtom.
+      const projects = text.match(re(/(\i)=\i\(\{catalogValueAtom:\i\.catalogValueAtom,snapshotAtom:\i(?:,\w+:\i\.\i)*\}\)/));
       if (!stores || !registry || !projects) return text;
       const internals = `{registry:${registry[1]},shells:${stores[3]},details:${stores[1]},projects:${projects[1]},commands:${stores[4]}}`;
       return `${text}\n;${self}.provide?.("threads.internals",${internals});`;

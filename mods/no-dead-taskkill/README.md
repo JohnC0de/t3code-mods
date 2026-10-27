@@ -1,5 +1,8 @@
 # No taskkill for exited processes
 
+**Obsolete from T3 Code 0.1.2.** T3's spawner now does this check itself, so the patch reports
+`match-missing` and nothing needs it. Uninstall the mod.
+
 On Windows, Effect's child process spawner (inside T3's backend) runs `taskkill /pid <pid> /T /F`
 twice for every child that exits with a non-zero code, after the child is already gone. 97% of
 those runs exit 128 (process not found). T3 runs git and gh through that spawner, and expected
