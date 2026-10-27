@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Settings Mods page works on T3 Code 0.1.3.** T3 moved the settings routes under `/_chat`
+  and split the nav labels, nav icons and route tree into three chunks, so the one group patch
+  `core/settings-page` matched nothing. `core/settings-page` now adds only the route (both
+  route names), and the new `core/settings-nav` adds the nav entry with its icon in the chunk
+  that builds the nav.
+- **`core/threads` matches T3 Code 0.1.2 and later**, where the project store takes more atoms.
+  `api.threads` (used by `agent-inbox` and `calm-thread`) works again.
+- **`no-dead-taskkill` is obsolete** from T3 Code 0.1.2: T3's spawner now skips `taskkill` for
+  a child that already exited. Its patch reports `match-missing`; uninstall the mod.
 - **New mod `no-dead-taskkill`:** on Windows, T3's backend no longer runs `taskkill /T /F` for a
   git or gh child that already exited with a non-zero code (two runs per failure, 97% exit 128,
   about 25 per minute). Live children that time out or get interrupted still get the tree kill.
