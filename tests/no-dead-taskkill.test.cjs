@@ -41,6 +41,27 @@ test("a live child still gets the tree kill", () => {
   assert.equal(calls[0][3], cb);
 });
 
+test("a build that ships the check (0.1.2+) is not selected, and the mod stays healthy", () => {
+  const SP = require("../loader/server-patches.cjs");
+  const fixed = `const taskkill = (childProcess, onExit = () => {}) => {
+	if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+		onExit(null);
+		return;
+	}
+	NodeChildProcess.execFile("taskkill", [
+		"/pid",
+		String(childProcess.pid),
+		"/T",
+		"/F"
+	], { windowsHide: true }, onExit);
+};`;
+  const r = SP.check([patch], [{ name: "binCli.mjs", text: fixed }]);
+  assert.deepEqual(r.results.map((x) => [x.status, x.optional]), [["find-missing", true]]);
+  assert.equal(r.health.get("no-dead-taskkill").status, "ok");
+  // The old helper is still selected.
+  assert.equal(SP.check([patch], [{ name: "binCli.mjs", text: FIXTURE }]).results[0].status, "ok");
+});
+
 test("a build whose helper changed fails the patch and leaves the text alone", () => {
   const changed = FIXTURE.replace('"/T",', '"/T", "/X",');
   const r = P.applyPatch(patch, changed);

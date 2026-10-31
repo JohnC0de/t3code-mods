@@ -304,7 +304,7 @@ export default async (api) => {
     if (!index) return h("div", { className: "t3m-page" }, h("p", { className: "t3m-muted" }, "Loading…"));
     const results = index.doctor?.results ?? [];
     const problems = index.mods.filter((m) => m.status === "degraded").length;
-    const badPatches = results.filter((r) => !["ok", "skipped"].includes(r.status)).length;
+    const badPatches = results.filter((r) => !["ok", "skipped", "replaced"].includes(r.status)).length;
     const sorted = [...index.mods].sort((a, b) => Number(a.builtin) - Number(b.builtin) || a.name.localeCompare(b.name));
     const active = index.mods.filter((m) => !m.builtin && m.status === "ok").length;
     return h("div", { className: "t3m-page" },

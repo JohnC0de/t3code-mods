@@ -30,6 +30,22 @@ test("other platforms keep --disable-gpu", () => {
   }
 });
 
+test("0.1.4 shape: one flag per line and a third flag; the patch keeps both", () => {
+  const fixture = `const options = {
+			args: [
+				"--disable-gpu",
+				"--force-device-scale-factor=2",
+				"--disable-blink-features=AutomationControlled"
+			],
+			headless: true
+		};`;
+  const r = P.applyPatch(patch, fixture);
+  assert.equal(r.ok, true, r.error);
+  const args = (platform) => [...vm.runInNewContext(`${r.text}\noptions.args`, { process: { platform } })];
+  assert.deepEqual(args("win32"), ["--use-angle=d3d11", "--force-device-scale-factor=2", "--disable-blink-features=AutomationControlled"]);
+  assert.deepEqual(args("linux"), ["--disable-gpu", "--force-device-scale-factor=2", "--disable-blink-features=AutomationControlled"]);
+});
+
 test("a build whose args changed fails the patch instead of half-applying", () => {
   const changed = FIXTURE.replace('"--disable-gpu", ', "");
   const r = P.applyPatch(patch, changed);

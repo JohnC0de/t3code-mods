@@ -247,10 +247,27 @@ function hookUpdaterInstall() {
       LOG("update install intercepted; the launcher prepares", cmd);
       // The launcher waits for this process to exit, so two app versions never run at once.
       const env = { ...platform.cleanEnv(options.env), T3MODS_NEW_APPIMAGE: cmd, T3MODS_OLD_PID: String(process.pid) };
-      return spawn.call(this, process.env.T3MODS_LAUNCHER, args ?? [], { ...options, env });
+      return spawn.call(this, process.env.T3MODS_LAUNCHER, platform.relaunchArgs(args, process.argv.slice(1)), { ...options, env });
     }
     return spawn.apply(this, arguments);
   };
+}
+
+// Two apps (profiles with their own T3CODE_HOME) can run from one AppImage. An update in one
+// deletes the AppImage the other was started from (electron-updater replaces the file), so
+// the other's own update would fail on the missing file. When the launcher's state moves to
+// a new AppImage and ours is gone, follow it: electron-updater reads APPIMAGE when it
+// downloads (the base for a differential download) and when it installs.
+function followAppImage() {
+  if (process.platform !== "linux" || !process.env.T3MODS_LAUNCHER || !process.env.APPIMAGE) return;
+  const state = platform.appImageStateFile();
+  fs.watchFile(state, { interval: 5000, persistent: false }, () => {
+    if (fs.existsSync(process.env.APPIMAGE)) return;
+    const next = platform.readEnvFile(state).T3MODS_APPIMAGE;
+    if (!next || next === process.env.APPIMAGE || !fs.existsSync(next)) return;
+    LOG("the AppImage was replaced by another app's update; following", next);
+    process.env.APPIMAGE = next;
+  });
 }
 
 // The helper runs from Task Scheduler because no child of the app survives the quit
@@ -279,6 +296,7 @@ function installMain() {
   const electron = require("electron");
   const { protocol, app } = electron;
   hookUpdaterInstall();
+  followAppImage();
 
   const rpcToken = crypto.randomBytes(24).toString("hex");
   process.env.T3MODS_RPC_TOKEN = rpcToken;
@@ -322,7 +340,7 @@ function installMain() {
     doctorReport = P.doctor(patches, readChunks(), (p) => predicates.get(p.key));
     health = P.resolveHealth(mods, doctorReport.results, loadErrors);
     activeKeys = new Set(patches.filter((p) => health.get(p.mod)?.status === "ok" && predicates.get(p.key)?.active).map((p) => p.key));
-    for (const r of doctorReport.results) if (!["ok", "skipped"].includes(r.status)) LOG(`patch ${r.status}:`, r.key);
+    for (const r of doctorReport.results) if (!P.HEALTHY.has(r.status)) LOG(`patch ${r.status}:`, r.key);
     for (const [id, h] of health) if (h.status === "degraded") LOG(`mod degraded: ${id}:`, h.problems.join("; "));
     try {
       const text = JSON.stringify(Object.fromEntries(health));

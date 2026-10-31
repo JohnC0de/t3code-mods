@@ -5,6 +5,44 @@
 - **New mod `compact-composer`:** the composer is one row, the prompt beside the model picker.
   The send, stop and attach buttons are gone (Enter sends, Esc stops, drop or paste attaches),
   and the permissions label shows inside the row only when it is not Full access.
+- **Agent images, Calm thread and Working keeps background commands work on T3 Code 0.1.4.**
+  0.1.4 splits a turn's fold at each steer message, derives the timeline rows in a hook
+  instead of a memo, and adds a subagent-request check to the Working test, so the three
+  patches matched nothing and the mods did not start. Each patch now handles the 0.1.4 shape
+  and keeps the 0.1.3 one; steer folds ("Continued for …") list their hidden images too.
+- **HTML path and Preview GPU server patches apply on T3 Code 0.1.4.** T3 reworded
+  html_preview's width description and lists the preview browser's flags one per line with a
+  third flag; both patches anchor on prop names and flags instead of exact text.
+- **No taskkill for exited processes stays healthy where T3 already has the fix.** Its patch
+  only selects the old helper and is optional, so 0.1.2 and later show `find-missing` instead
+  of switching the mod's server patches off.
+- **Settings Mods entry is back on T3 Code 0.1.4.** The nav now renders headed groups of
+  paths, so `core/settings-nav` found nothing. The new `core/settings-nav-groups` adds the
+  icon, the label and the path (after Archive) in the chunk that renders the nav.
+- **Patches can replace an older patch** (`replaces: "<id>"` in the same mod). While the new
+  one applies, the old one finding nothing shows as `replaced`, not `find-missing`: no startup
+  log line, no count in the Mods page, and `requires` on the old id still holds.
+  `core/settings-nav-groups` replaces `core/settings-nav`.
+- **AppImage updates keep the app's switches.** electron-updater starts the new AppImage with
+  no arguments, so `--ozone-platform`, `--user-data-dir` and the like were gone after the
+  first update. The loader now hands the launcher this run's switches (not the link that
+  opened it).
+- **Two profiles on one AppImage.** An update in one profile deletes the AppImage the other was
+  started from, so the other's update failed on the missing file. The loader follows the
+  launcher's state to the new AppImage, and install keeps any version an app still runs.
+- **t3code:// links reach the modded app after an update.** T3 Code writes its own link entry
+  for the bare AppImage, which has no mods and is gone after the next update. The launcher
+  sets `T3CODE_DESKTOP_LAUNCHER_PATH` to itself (unless you set it), so that entry starts the
+  launcher.
+- **`install --no-menu-entry`** hides **T3 Code (mods)** from the app menu, for setups with their
+  own entries (one per profile); it keeps handling links, and the choice survives updates.
+- **`doctor` checks server patches on Linux.** It looked for `server.asar`, which only Windows
+  ships, and failed with `Invalid package`; it now reads the backend next to the client chunks.
+  `tools/extract-assets.cjs` works on Linux installs too.
+- **Mods survive updates of a self-extracted AppImage.** A folder you extract yourself (for
+  example `~/.local/opt/t3code-nightly/<version>`) has no update hook, so every new version
+  started without mods. Start the app through `~/.t3/t3mods/linux/launch.sh <t3code exe>`: it
+  installs the shim when the folder lacks it, once even when two profiles start together.
 - **Settings Mods page works on T3 Code 0.1.3.** T3 moved the settings routes under `/_chat`
   and split the nav labels, nav icons and route tree into three chunks, so the one group patch
   `core/settings-page` matched nothing. `core/settings-page` now adds only the route (both

@@ -197,6 +197,7 @@ module.exports = [
 | `transform(text)` | Free-form edit when names must be captured elsewhere in the chunk. |
 | `group: true` | All entries apply, or the chunk stays as it was. |
 | `optional: true` | A failure does not stop the mod. |
+| `replaces: "<id>"` | The same edit for a newer app shape. While it applies, the older patch `<id>` finding nothing shows as `replaced`, not as a failure. |
 | `predicate({ state })` | `false` skips the patch. |
 
 Anchor on source shapes (row kinds, prop names, strings), not on minified names. When an
@@ -204,6 +205,8 @@ app update breaks a patch:
 
 ```sh
 ELECTRON_RUN_AS_NODE=1 "<app dir>/T3 Code (Nightly).exe" tools/extract-assets.cjs extracted/new
+# Linux: the app's own executable, and the folder that holds resources/
+ELECTRON_RUN_AS_NODE=1 "<app dir>/t3code" tools/extract-assets.cjs extracted/new "<app dir>"
 node loader/t3mods.mjs doctor --mods <your mods dir> --assets extracted/new
 ```
 

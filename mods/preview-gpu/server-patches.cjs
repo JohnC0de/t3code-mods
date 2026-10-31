@@ -17,8 +17,9 @@ module.exports = [
     find: '"--force-device-scale-factor=2"',
     replace: [
       {
-        match: /args: \["--disable-gpu", "--force-device-scale-factor=2"\]/,
-        replace: () => `args: [${GPU_FLAG}, "--force-device-scale-factor=2"]`,
+        // 0.1.4 lists one flag per line and adds more after these two.
+        match: /args: \[(\s*)"--disable-gpu",(\s*)"--force-device-scale-factor=2"/,
+        replace: (_, a, b) => `args: [${a}${GPU_FLAG},${b}"--force-device-scale-factor=2"`,
       },
     ],
   },

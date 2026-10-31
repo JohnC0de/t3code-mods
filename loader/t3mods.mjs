@@ -49,6 +49,8 @@ const HELP = `t3mods <command> [options]
 Options:
   --app <install dir>        T3 Code folder (found automatically in the usual places)
   --appimage <file>          Linux: use this AppImage
+  --no-menu-entry            Linux AppImage install: hide "T3 Code (mods)" from the app menu
+                             (links still open through it); --menu-entry shows it again
   --mods <mods dir>          Mods folder (default ~/.t3/mods)`;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -72,20 +74,10 @@ if (opt("--mods")) process.env.T3MODS_DIR = path.resolve(opt("--mods"));
 // ---------- finding the app ----------
 
 const appImageRoot = () => path.join(platform.dataHome(), "appimage");
-const appImageStateFile = () => path.join(appImageRoot(), "current.env");
+const appImageStateFile = platform.appImageStateFile;
 const launcherPath = () => path.join(os.homedir(), ".local", "bin", "t3code-mods");
 const desktopFile = () => path.join(os.homedir(), ".local", "share", "applications", "t3code-mods.desktop");
-
-// KEY='value' lines, readable by the launcher (POSIX sh) and by this CLI.
-function readEnvFile(file) {
-  if (!fs.existsSync(file)) return {};
-  const out = {};
-  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
-    const m = /^([A-Z0-9_]+)='(.*)'$/.exec(line);
-    if (m) out[m[1]] = m[2].replaceAll(`'\\''`, "'");
-  }
-  return out;
-}
+const readEnvFile = platform.readEnvFile;
 const shQuote = (s) => `'${String(s).replaceAll("'", `'\\''`)}'`;
 function writeAtomic(file, text, mode = 0o644) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -357,18 +349,21 @@ function installAppImage(spec) {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.renameSync(tmp, dir);
   }
+  // The menu entry choice sticks: the launcher runs install again after each app update.
+  const menu = flag("--no-menu-entry") ? "0" : flag("--menu-entry") ? "1" : (prev.T3MODS_MENU_ENTRY ?? "1");
   refreshKit();
   applyShim(path.join(appDir, "resources"));
-  writeAtomic(appImageStateFile(), `T3MODS_APPIMAGE=${shQuote(file)}\nT3MODS_APPDIR=${shQuote(appDir)}\nT3MODS_VERSION=${shQuote(version)}\n`);
+  writeAtomic(appImageStateFile(), `T3MODS_APPIMAGE=${shQuote(file)}\nT3MODS_APPDIR=${shQuote(appDir)}\nT3MODS_VERSION=${shQuote(version)}\nT3MODS_MENU_ENTRY=${shQuote(menu)}\n`);
   writeLauncher();
-  writeDesktopEntry(appDir);
+  writeDesktopEntry(appDir, menu === "1");
   // Keep this version and the one before it; a failed update can fall back to the old one.
+  // Another app (a second profile) may still run an older one until it restarts: keep that too.
   const keep = new Set([version, prev.T3MODS_VERSION].filter(Boolean));
   for (const d of fs.readdirSync(appImageRoot())) {
     const full = path.join(appImageRoot(), d);
-    if (fs.statSync(full).isDirectory() && !keep.has(d)) fs.rmSync(full, { recursive: true, force: true });
+    if (fs.statSync(full).isDirectory() && !keep.has(d) && !running(full)) fs.rmSync(full, { recursive: true, force: true });
   }
-  console.log(`start T3 Code with mods from your app menu ("T3 Code (mods)") or: ${launcherPath()}`);
+  console.log(menu === "1" ? `start T3 Code with mods from your app menu ("T3 Code (mods)") or: ${launcherPath()}` : `start T3 Code with mods through ${launcherPath()} (menu entry hidden)`);
 }
 
 function writeLauncher() {
@@ -402,12 +397,17 @@ if [ -n "\${T3MODS_OLD_PID:-}" ]; then
 fi
 unset T3MODS_NEW_APPIMAGE T3MODS_OLD_PID APPIMAGE_SILENT_INSTALL APPDIR
 export APPIMAGE="$T3MODS_APPIMAGE" T3MODS_LAUNCHER=${shQuote(launcherPath())}
+# The app writes its own t3code:// handler entry, which starts the AppImage itself (no mods,
+# and gone after the next update renames it). Point it here instead, unless the caller set it.
+export T3CODE_DESKTOP_LAUNCHER_PATH="\${T3CODE_DESKTOP_LAUNCHER_PATH:-$T3MODS_LAUNCHER}"
 exec "$T3MODS_APPDIR/AppRun" "$@"
 `;
   writeAtomic(launcherPath(), text, 0o755);
 }
 
-function writeDesktopEntry(appDir) {
+// `shown` false (install --no-menu-entry, for people with their own menu entries) keeps the
+// entry for t3code:// and t3mods:// links but hides it from the app menu.
+function writeDesktopEntry(appDir, shown = true) {
   writeAtomic(
     desktopFile(),
     `[Desktop Entry]
@@ -420,7 +420,7 @@ Type=Application
 StartupWMClass=t3code
 MimeType=x-scheme-handler/t3code;x-scheme-handler/t3mods;
 Categories=Development;
-`,
+${shown ? "" : "NoDisplay=true\n"}`,
   );
   registerSchemes(desktopFile(), ["t3code", "t3mods"]);
 }
@@ -764,7 +764,9 @@ function doctor() {
     }
     assets = platform.clientAssetsDir(path.join(dir, "resources"));
     if (!assets) throw new Error(`no web client chunks found in ${dir}`);
-    serverDist ??= path.join(dir, "resources", "server.asar", "apps", "server", "dist");
+    // The backend sits next to the client: <asar>/apps/server/dist/client/assets. Windows
+    // ships both in server.asar, Linux in the (renamed) app asar.
+    serverDist ??= path.dirname(path.dirname(assets));
   } else if (!serverDist && fs.existsSync(path.join(assets, "server"))) serverDist = path.join(assets, "server"); // from tools/extract-assets.cjs
   const store = require("./store.cjs");
   const P = require("./patcher.cjs");
@@ -786,7 +788,7 @@ function doctor() {
   }
   for (const [id, h] of P.resolveHealth(mods, report.results, errors)) if (h.status === "degraded") console.log(`mod ${id}: not started (${h.problems.join("; ")})`);
   console.log(`${report.results.length} patches, ${report.chunks} chunks, ${report.ms} ms`);
-  if (report.results.some((r) => !r.optional && !["ok", "skipped"].includes(r.status))) process.exitCode = 1;
+  if (report.results.some((r) => !r.optional && !P.HEALTHY.has(r.status))) process.exitCode = 1;
   if (!serverDist) {
     const withServerPatches = mods.filter((m) => m.enabled && m.files.serverPatches).map((m) => m.id);
     if (withServerPatches.length) console.log(`server patches NOT checked for ${withServerPatches.join(", ")}: pass --server-dist <dir with the backend's .mjs chunks>`);

@@ -22,6 +22,8 @@ const WORKING =
   "function ge(e){if(e.hasPendingApprovals||e.hasPendingUserInput||!y(e.runtime)&&e.runtime?.status!==`idle`)return!1;" +
   "let t=e.latestRun,n=t!==null&&t.status!==`preparing`&&t.status!==`queued`&&t.status!==`starting`&&t.status!==`running`&&t.status!==`waiting`&&e.runtime?.activeRunId!==t.runId;" +
   "return!(e.interactionMode===`plan`&&e.hasActionableProposedPlan&&n)}";
+// 0.1.4: a subagent request that waits on the user also sends the thread to the inbox.
+const WORKING_014 = WORKING.replace("e.hasPendingUserInput||", "e.hasPendingUserInput||e.pendingSubagentRequest!=null||");
 
 const patch = (text) => P.applyAll(patches(), text, () => true);
 
@@ -78,6 +80,16 @@ test("patched: work that needs the user still goes to the inbox", () => {
   assert.equal(working(thread({ ...waiting, interactionMode: "plan", hasActionableProposedPlan: true })), false, "ready plan");
 });
 
+test("0.1.4 shape: the patch applies and keeps the subagent-request check", () => {
+  const report = P.doctor(patches(), [{ name: "chunk.js", text: WORKING_014 }]);
+  assert.deepEqual(report.results.map((r) => [r.id, r.status]), [["working-keeps-background-commands", "ok"]]);
+  const working = load(patch(WORKING_014));
+  assert.equal(working(thread({ pendingBackgroundTasks: command })), true);
+  assert.equal(working(thread()), false);
+  assert.equal(working(thread({ pendingBackgroundTasks: command, pendingSubagentRequest: { id: "r-1" } })), false, "subagent request");
+  assert.equal(working(thread({ pendingBackgroundTasks: command, runtime: { status: "failed", activeRunId: null } })), false, "failed run");
+});
+
 test("on the sandbox app's bundle the patch selects one chunk, which still parses and keeps a command in Working", { skip: !fs.existsSync(realAsar) && "no sandbox app" }, () => {
   // One header read: asar.readFile parses the header on each call.
   const { header, dataOffset } = asar.readHeader(realAsar);
@@ -106,7 +118,7 @@ test("on the sandbox app's bundle the patch selects one chunk, which still parse
   }
 
   // The shipped function itself, with the bundle's runtime-active helper renamed to ours.
-  const fn = patched.match(/function ([\w$]+)\(([\w$]+)\)\{if\(\2\.hasPendingApprovals\|\|\2\.hasPendingUserInput\|\|\2\.runtime\?\.status===`failed`[^{}]*\}/);
+  const fn = patched.match(/function ([\w$]+)\(([\w$]+)\)\{if\(\2\.hasPendingApprovals\|\|\2\.hasPendingUserInput(?:\|\|\2\.\w+(?:!=null)?)*?\|\|\2\.runtime\?\.status===`failed`[^{}]*\}/);
   assert.ok(fn, "the patched Working check is in the chunk");
   const helper = fn[0].match(/!([\w$]+)\(\w+\.runtime\)/)[1];
   const working = load(`var ${helper}=y;${fn[0]}`, fn[1]);

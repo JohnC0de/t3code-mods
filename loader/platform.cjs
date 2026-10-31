@@ -28,6 +28,31 @@ const LINUX_SYSTEM_DIRS = ["/opt/T3 Code (Nightly)", "/opt/T3 Code", "/opt/t3cod
 const APPIMAGE_NAME = /^T3-Code-(.+)-(x86_64|arm64|aarch64)\.AppImage$/;
 const appImageVersion = (file) => APPIMAGE_NAME.exec(path.basename(file))?.[1] ?? null;
 
+// The AppImage install's state (T3MODS_APPIMAGE, T3MODS_APPDIR, ...), written by install and
+// read by the launcher, the CLI and the loader.
+const appImageStateFile = () => path.join(dataHome(), "appimage", "current.env");
+
+// KEY='value' lines, readable by the launcher (POSIX sh) and by this code.
+function readEnvFile(file) {
+  if (!fs.existsSync(file)) return {};
+  const out = {};
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    const m = /^([A-Z0-9_]+)='(.*)'$/.exec(line);
+    if (m) out[m[1]] = m[2].replaceAll(`'\\''`, "'");
+  }
+  return out;
+}
+
+// electron-updater starts the new AppImage without arguments, which would drop the switches
+// the app was started with (--ozone-platform, --user-data-dir, ...). Without updater
+// arguments, the relaunch gets this run's switches; positional arguments (a t3code:// link
+// that started the app) stay behind, or the link would open again. Duplicates go too: a
+// wrapper that adds a switch (AppRun's --no-sandbox) must not add one more on every update.
+function relaunchArgs(updaterArgs, argv) {
+  if (updaterArgs?.length) return updaterArgs;
+  return [...new Set(argv.filter((a) => /^--?[^-]/.test(a)))];
+}
+
 // electron-updater starts the app update with child_process.spawn. Decides what the loader
 // does with one spawn call:
 //   "windows-installer": the NSIS installer (`--updated`); the post-update task reinstalls.
@@ -68,4 +93,4 @@ function appInfo(env, homedir, platform = process.platform) {
   return { id, name: named || (isDefault ? null : derived), home };
 }
 
-module.exports = { kitHome, dataHome, clientAssetsDir, LINUX_SYSTEM_DIRS, APPIMAGE_NAME, appImageVersion, classifyUpdaterSpawn, cleanEnv, appInfo };
+module.exports = { kitHome, dataHome, clientAssetsDir, LINUX_SYSTEM_DIRS, APPIMAGE_NAME, appImageVersion, appImageStateFile, readEnvFile, relaunchArgs, classifyUpdaterSpawn, cleanEnv, appInfo };

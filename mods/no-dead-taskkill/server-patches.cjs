@@ -12,12 +12,17 @@
 //
 // Fail safe: if the helper's shape changes in a T3 update, the patch fails, the chunk stays
 // unpatched and the loader logs it; `t3mods doctor` shows the state.
+//
+// T3 Code 0.1.2 and later ship this check in the helper (its body is a block with the guard),
+// so `find` only selects the old one-expression helper, and the patch is optional: on a fixed
+// build it finds nothing and the mod stays healthy.
 
 /** @type {import("../../loader/types/t3mods").ServerPatch[]} */
 module.exports = [
   {
     id: "skip-taskkill-for-exited-child",
-    find: '"taskkill", [',
+    find: /\) => [A-Za-z_$][\w$]*\.execFile\("taskkill", \[/,
+    optional: true,
     replace: [
       {
         match:

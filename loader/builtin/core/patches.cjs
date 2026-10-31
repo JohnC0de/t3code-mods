@@ -88,6 +88,23 @@ module.exports = [
     ],
   },
   {
+    // Settings nav from 0.1.4: the nav renders headed groups of paths (imported with the label
+    // map from another chunk) with the icon map's icon. The chunk that renders the nav holds
+    // all three names, so one edit there adds the icon, the label and the path (in the last
+    // group, after Archive) together.
+    id: "settings-nav-groups",
+    replaces: "settings-nav",
+    optional: true,
+    find: "`settings-search-results`",
+    transform(text, { self }) {
+      const groups = text.match(re(/(\i)\.map\(\(\i,\i\)=>\(0,\i\.jsxs\)\(`div`,\{role:`group`/));
+      const row = text.match(re(/\.paths\.map\((\i)=>\{let \i=(\i)\[\1\],.{0,400}?children:(\i)\[\1\]\}/));
+      if (!groups || !row) return text;
+      const [, , icons, labels] = row;
+      return `${text}\n;Object.assign(${icons},{"/settings/mods":${self}.ModsIcon});Object.assign(${labels},{"/settings/mods":\`Mods\`});${groups[1]}.at(-1)?.paths.push(\`/settings/mods\`);`;
+    },
+  },
+  {
     // Thread state and thread commands for api.threads. The app keeps them in one atom
     // registry: the thread shell store (a summary per thread, built on the thread command
     // store's snapshot), the thread detail store (the full projection, loaded on demand) and

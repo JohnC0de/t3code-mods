@@ -9,6 +9,8 @@
 //     transform?: (text, { self }) => text, // edits that need names captured elsewhere in the chunk
 //     group?: true,              // all entries apply, or the chunk stays untouched
 //     optional?: true,           // a failure does not degrade the mod
+//     replaces?: "old-id",       // the same edit for a newer app shape: while this one applies,
+//                                // "old-id" finding nothing is expected (status "replaced")
 //     predicate?: ({ state }) => boolean, // false skips the patch (state = the mod's saved state)
 //   }
 // In replacements, `\i` matches one minified identifier and `$self` refers to the mod's
@@ -105,10 +107,15 @@ function doctor(patches, chunks, activeOf = () => ({ active: true })) {
     const status = r.error ? "error" : r.ok ? "ok" : r.entries.some(Boolean) ? "partial" : "match-missing";
     return { ...base, status, chunks: names, entries: r.entries, ...(r.error ? { error: r.error } : {}) };
   });
+  patches.forEach((p, i) => {
+    if (p.replaces === undefined || results[i].status !== "ok") return;
+    const old = results.find((r) => r.mod === p.mod && r.id === String(p.replaces));
+    if (old?.status === "find-missing") old.status = "replaced";
+  });
   return { ms: Date.now() - t0, chunks: chunks.length, results };
 }
 
-const HEALTHY = new Set(["ok", "skipped"]);
+const HEALTHY = new Set(["ok", "skipped", "replaced"]);
 
 // Decides which mods may run. A mod is degraded when one of its own non-optional patches
 // fails, or when something in its manifest `requires` is missing or unhealthy:
@@ -185,4 +192,4 @@ function tryPatch(p, chunks, context = 120) {
     });
 }
 
-module.exports = { IDENT, compileMatch, normalize, applyPatch, evalPredicate, doctor, resolveHealth, applyAll, tryPatch, selfRef };
+module.exports = { IDENT, HEALTHY, compileMatch, normalize, applyPatch, evalPredicate, doctor, resolveHealth, applyAll, tryPatch, selfRef };

@@ -66,6 +66,20 @@ test("doctor applies patches in order, so a conflict with an earlier patch shows
   assert.deepEqual(report.results.map((r) => r.status), ["ok", "match-missing"]);
 });
 
+test("a patch for the newer app shape replaces the older one only while it applies", () => {
+  const older = patch("core", { id: "nav", optional: true, find: "navLabels", replace: [{ match: "navLabels", replace: "navLabels2" }] });
+  const newer = patch("core", { id: "nav-groups", replaces: "nav", optional: true, find: "navGroups", replace: [{ match: "navGroups", replace: "navGroups2" }] });
+  const status = (chunks) => Object.fromEntries(doctor([older, newer], chunks).results.map((r) => [r.id, r.status]));
+  assert.deepEqual(status([chunk("a.js", "navGroups")]), { nav: "replaced", "nav-groups": "ok" });
+  assert.deepEqual(status([chunk("a.js", "navLabels")]), { nav: "ok", "nav-groups": "find-missing" });
+  // Neither shape found: both show, the replacement does not hide a real break.
+  assert.deepEqual(status([chunk("a.js", "other")]), { nav: "find-missing", "nav-groups": "find-missing" });
+  // A required patch that was replaced counts as healthy.
+  const mods = [{ id: "core", enabled: true }, { id: "m", enabled: true, manifest: { requires: ["core/nav"] } }];
+  const results = doctor([older, newer], [chunk("a.js", "navGroups")]).results;
+  assert.equal(resolveHealth(mods, results).get("m").status, "ok");
+});
+
 test("predicate false skips a patch; a throwing predicate is an error", () => {
   const ps = normalize("m", [
     { id: "off", find: "a", predicate: ({ state }) => state.on, replace: [{ match: /a/, replace: "b" }] },

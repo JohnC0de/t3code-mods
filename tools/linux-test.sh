@@ -12,6 +12,7 @@ export MSYS_NO_PATHCONV=1
 root=$(pwd -W 2>/dev/null || pwd)
 art=platforms/linux
 mkdir -p "$art/out"
+chmod a+rwx "$art/out" # the container user writes the screenshot here
 
 if ! ls "$art"/T3-Code-*-x86_64.AppImage "$art"/T3-Code-*-amd64.deb >/dev/null 2>&1; then
   tag=$(gh release list -R pingdotgg/t3code -L 1 --json tagName --jq '.[0].tagName')
