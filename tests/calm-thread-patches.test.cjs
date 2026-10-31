@@ -1,5 +1,6 @@
 // calm-thread: the timeline-rows patch hands T3's rows to the renderer's `calmRows`, and Full
-// density opens every fold. HOOK_014 (React Compiler output, a derive hook plus a stabilizer)
+// density opens every fold. VAR_017 (the 0.1.4 hooks, with the input object cached in a variable
+// by the compiler), HOOK_014 (React Compiler output, a derive hook plus a stabilizer)
 // and MEMO_013 (a useMemo with a ref) are MessagesTimeline's rows code, trimmed, as 0.1.4 and
 // 0.1.3 ship it. A fake React runs them: useMemo recomputes when a dependency changes.
 const test = require("node:test");
@@ -12,6 +13,11 @@ const patches = () => P.normalize("calm-thread", require("../mods/calm-thread/pa
 const HOOK_014 =
   "function rowsOf(Z,eb,$y,ct,he,E,M,u,vn,gt){let[a]=(0,Z.useState)(0);" +
   "let Tn=new Set,En=eb($y(`${ct}\\0${he??``}`,{timelineEntries:E,pendingApprovalRequestIds:Tn,latestRun:M,expandedRunIds:vn,expandedWorkGroupIds:gt,isWorking:u,continuesWorkLog:!0}),ct);return En}";
+
+const VAR_017 =
+  "function rowsOf(Z,eb,$y,ct,he,E,M,u,vn,gt,t){let[a]=(0,Z.useState)(0);let Fn;" +
+  "t[0]!==E||t[1]!==M||t[2]!==u||t[3]!==vn||t[4]!==gt?(Fn={timelineEntries:E,latestRun:M,expandedRunIds:vn,expandedWorkGroupIds:gt,isWorking:u,continuesWorkLog:!0},t[0]=E,t[1]=M,t[2]=u,t[3]=vn,t[4]=gt,t[5]=Fn):Fn=t[5];" +
+  "let X=eb($y(`${ct}\\0${he??``}`,Fn),ct);return X}";
 
 const MEMO_013 =
   "function rowsOf(R,useStableRows,derive,reuse,key,E,M,u,vn,gt){let ref=(0,R.useRef)(null),rows=useStableRows((0,R.useMemo)(()=>{" +
@@ -43,15 +49,16 @@ function setup(code) {
   return { ctx, calls, store: () => ctx.__t3modCalm };
 }
 
-for (const [name, code] of [["0.1.4", HOOK_014], ["0.1.3", MEMO_013]]) {
+for (const [name, code] of [["0.1.7", VAR_017], ["0.1.4", HOOK_014], ["0.1.3", MEMO_013]]) {
   test(`${name} shape: the patch applies`, () => {
     const report = P.doctor(patches(), [{ name: "chunk.js", text: code }]);
     assert.deepEqual(report.results.map((r) => [r.id, r.status]), [["timeline-rows", "ok"]]);
   });
 }
 
-test("0.1.4 shape: calmRows gets T3's rows and the thread, and runs again on a bump", () => {
-  const { ctx, calls, store } = setup(P.applyAll(patches(), HOOK_014, () => true));
+for (const [name, code] of [["0.1.7", VAR_017], ["0.1.4", HOOK_014]]) test(`${name} shape: calmRows gets T3's rows and the thread, and runs again on a bump`, () => {
+  const { ctx, calls, store } = setup(P.applyAll(patches(), code, () => true));
+  const cache = [];
   const { R, render } = fakeReact();
   const inputs = [];
   // Like T3's derive hook: the same rows while every input field is the same (Sets by content).
@@ -69,7 +76,7 @@ test("0.1.4 shape: calmRows gets T3's rows and the thread, and runs again on a b
   const entries = [{ id: "e1" }];
   const run = { runId: "run-1" };
   const open = new Set();
-  const draw = () => (render(), ctx.rowsOf(R, stable, derive, "env:thread-1", "/repo", entries, run, true, open, open));
+  const draw = () => (render(), ctx.rowsOf(R, stable, derive, "env:thread-1", "/repo", entries, run, true, open, open, cache));
 
   assert.deepEqual(draw(), ["calm", "row-1", "row-2"]);
   // The context object comes from the vm's realm: compare its fields.
