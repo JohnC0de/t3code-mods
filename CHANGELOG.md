@@ -5,11 +5,15 @@
 - **New mod `compact-composer`:** the composer is one row, the prompt beside the model picker.
   The send, stop and attach buttons are gone (Enter sends, Esc stops, drop or paste attaches),
   and the permissions label shows inside the row only when it is not Full access.
+  0.2.0: background work ("Waiting on 3 subagents · Stop") moves from the timeline's last
+  line into the row as "3 agents", and Esc stops it when no turn runs.
 - **Agent images, Calm thread and Working keeps background commands work on T3 Code 0.1.4.**
   0.1.4 splits a turn's fold at each steer message, derives the timeline rows in a hook
   instead of a memo, and adds a subagent-request check to the Working test, so the three
   patches matched nothing and the mods did not start. Each patch now handles the 0.1.4 shape
   and keeps the 0.1.3 one; steer folds ("Continued for …") list their hidden images too.
+  On 0.1.7 the compiler caches the rows input in a variable, so `calm-thread` also matches
+  that shape; the other two patches already applied there.
 - **HTML path and Preview GPU server patches apply on T3 Code 0.1.4.** T3 reworded
   html_preview's width description and lists the preview browser's flags one per line with a
   third flag; both patches anchor on prop names and flags instead of exact text.
