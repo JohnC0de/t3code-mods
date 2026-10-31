@@ -1,0 +1,67 @@
+/* Compact composer: one row, prompt left, model picker right.
+   Anchored on the app's data attributes; no patches. */
+
+/* The row: editor and footer side by side, controls on the last line when it grows. */
+[data-chat-composer-surface="true"] {
+  display: flex;
+  align-items: flex-end;
+}
+[data-chat-composer-body="true"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px calc(4px + var(--cc-trail, 0px)) 7px 16px !important;
+}
+[data-chat-composer-body="true"] .composer-tiptap {
+  min-height: calc(1lh + 8px) !important;
+}
+[data-chat-composer-footer="true"] {
+  flex: none;
+  height: 38px;
+  padding: 0 5px 0 0 !important;
+}
+[data-chat-composer-footer="true"] [data-chat-composer-actions="right"],
+[data-chat-composer-footer="true"] [data-chat-composer-footer-controls="true"] {
+  flex: none !important;
+}
+
+/* A pill that turns into a rounded box when the prompt wraps. */
+[data-slot="composer-host"],
+[data-chat-composer-main-surface="true"],
+[data-chat-composer-surface="true"] {
+  border-radius: 20px !important;
+}
+
+/* Gone: attach (drop or paste instead), send (Enter), stop (Esc). */
+[data-chat-composer-footer="true"] > div:has(> input[type="file"]),
+[data-chat-composer-actions="right"] span:has(> button[type="submit"]),
+[data-chat-composer-actions="right"] button[type="submit"],
+[data-chat-composer-actions="right"] button[aria-label="Stop generation"] {
+  display: none !important;
+}
+
+/* Permissions only when they differ from Full access; the strip sits inside the row. */
+[data-composer-context-control][aria-label="Permissions: Full access"] {
+  display: none !important;
+}
+[data-slot="composer-shell"] > div:has([data-slot="composer-context-strip"]) {
+  position: absolute;
+  z-index: 20;
+  right: var(--cc-footer, 0px);
+  bottom: 1px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  min-height: 0 !important;
+}
+[data-slot="composer-shell"] > div:has([data-slot="composer-context-strip"]) [data-slot="composer-context-strip"] {
+  padding: 0 4px !important;
+}
+[data-composer-context-control][aria-label^="Permissions:"] {
+  color: var(--color-warning, var(--warning)) !important;
+}
+[data-slot="composer-shell"] > div:has([data-slot="composer-context-strip"]) [data-slot="composer-context-strip"]:not(:has([data-composer-context-control]:not([aria-label="Permissions: Full access"]))) {
+  display: none !important;
+}
+[data-slot="composer-shell"][data-context-row="true"] [data-slot="composer-host"]::before {
+  display: none !important;
+}

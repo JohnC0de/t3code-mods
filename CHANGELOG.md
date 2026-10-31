@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **New mod `compact-composer`:** the composer is one row, the prompt beside the model picker.
+  The send, stop and attach buttons are gone (Enter sends, Esc stops, drop or paste attaches),
+  and the permissions label shows inside the row only when it is not Full access.
 - **Settings Mods page works on T3 Code 0.1.3.** T3 moved the settings routes under `/_chat`
   and split the nav labels, nav icons and route tree into three chunks, so the one group patch
   `core/settings-page` matched nothing. `core/settings-page` now adds only the route (both

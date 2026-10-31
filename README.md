@@ -111,6 +111,7 @@ Ask questions and propose ideas in [Discussions](https://github.com/JohnC0de/t3c
 | [`calm-thread`](mods/calm-thread) | Finished turns read as one-line titles; open one for the prompt, a work receipt and the answer. Focus, Normal and Full density on Alt+D. | Not on the registry yet: `t3mods pack mods/calm-thread`, then `t3mods add` the zip. |
 | [`find-in-thread`](mods/find-in-thread) | Ctrl+F finds and highlights text in the open thread, also in messages scrolled out of view. | Not on the registry yet: `t3mods pack mods/find-in-thread`, then `t3mods add` the zip. |
 | [`html-path`](mods/html-path) | `html_preview` and `html_render` take the path of an `.html` file, so agents stop pasting whole pages as tool input. | Not on the registry yet: `t3mods pack mods/html-path`, then `t3mods add` the zip. |
+| [`compact-composer`](mods/compact-composer) | One-row composer: prompt and model picker side by side, no send, stop or attach buttons (Enter sends, Esc stops, drop or paste attaches). | Not on the registry yet: `t3mods pack mods/compact-composer`, then `t3mods add` the zip. |
 | [`app-badge`](mods/app-badge) | Tells your T3 Code apps apart when you run more than one: a window title and, on Windows, a taskbar badge. | Not on the registry yet: `t3mods pack mods/app-badge`, then `t3mods add` the zip. |
 
 ## Contribute
