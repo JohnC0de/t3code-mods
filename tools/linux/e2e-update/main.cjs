@@ -1,7 +1,7 @@
 // Test mod for tools/linux/scenario.sh: does what electron-updater's AppImageUpdater does at
-// the end of an update (start the new AppImage with APPIMAGE_SILENT_INSTALL, then quit), so
-// the test runs the loader's real spawn hook. It records what was actually started in
-// /tmp/e2e-update.json, because the app quits right after.
+// the end of an update (start the new AppImage with APPIMAGE_SILENT_INSTALL and no
+// arguments, then quit), so the test runs the loader's real spawn hook. It records what was
+// actually started in /tmp/e2e-update.json, because the app quits right after.
 module.exports = ({ electron }) => ({
   update(file, args = []) {
     const child = require("node:child_process").spawn(file, args, {
@@ -14,4 +14,6 @@ module.exports = ({ electron }) => ({
     setTimeout(() => electron.app.quit(), 1000);
     return { spawned: child.spawnfile };
   },
+  // The AppImage electron-updater would replace now.
+  appimage: () => process.env.APPIMAGE ?? null,
 });

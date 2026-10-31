@@ -29,7 +29,12 @@ function schema(text) {
   const d = decl.exec(text);
   if (!d) throw new Error("the html schema declaration is missing");
   const [, html, str] = d;
-  const opt = new RegExp(`width: (${ID})\\(${ID}\\.annotate\\(\\{ description: \`Viewport width`).exec(text);
+  // html_preview's `width` follows `html` and is optional: its wrapper is the Optional helper.
+  // 0.1.4 reworded the width description, so the prop names are the anchor; 0.1.3 as fallback.
+  const htmlRe = html.replace(/\$/g, "\\$");
+  const opt =
+    new RegExp(`parameters: ${ID}\\(\\{\\s*html: ${htmlRe},\\s*width: (${ID})\\(${ID}\\.annotate\\(`).exec(text) ??
+    new RegExp(`width: (${ID})\\(${ID}\\.annotate\\(\\{ description: \`Viewport width`).exec(text);
   if (!opt) throw new Error("html_preview's optional width is missing");
   const optional = opt[1];
   const field = new RegExp(`(parameters: ${ID}\\(\\{\\s*)html: ${html.replace(/\$/g, "\\$")},`, "g");

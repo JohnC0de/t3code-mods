@@ -16,7 +16,7 @@ const P = require("./patcher.cjs");
 const FILE = "server-patches.cjs";
 const DIST = "apps/server/dist";
 const MARKER = "/*t3mods:server-patched ";
-const HEALTHY = new Set(["ok", "skipped", "baked"]);
+const HEALTHY = new Set([...P.HEALTHY, "baked"]);
 
 // Keys of the patches written into this chunk by `t3mods server-patch`.
 function bakedKeys(text) {

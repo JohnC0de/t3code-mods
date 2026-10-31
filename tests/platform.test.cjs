@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { classifyUpdaterSpawn, appImageVersion, clientAssetsDir, cleanEnv, appInfo } = require("../loader/platform.cjs");
+const { classifyUpdaterSpawn, appImageVersion, clientAssetsDir, cleanEnv, appInfo, relaunchArgs, readEnvFile } = require("../loader/platform.cjs");
 
 test("a relaunched app gets the user's NODE_OPTIONS back, not the loader's", () => {
   const loaderEnv = { PATH: "/usr/bin", NODE_OPTIONS: '--require "/k/t3mods-loader.cjs"', T3MODS_RPC_TOKEN: "t", T3MODS_MAIN_PID: "1" };
@@ -26,6 +26,25 @@ test("updater spawns: NSIS installer, new AppImage, and everything else", () => 
   // Agents and terminals spawned by the app must never be redirected.
   assert.equal(classifyUpdaterSpawn("linux", ["-c", "ls"], { env: { PATH: "/usr/bin" } }, launcher), "pass");
   assert.equal(classifyUpdaterSpawn("linux", ["--updated"], {}, launcher), "pass");
+});
+
+test("an AppImage relaunch after an update keeps the switches the app started with", () => {
+  const argv = ["--ozone-platform=wayland", "--user-data-dir=/home/u/.config/t3code-v2", "-v", "t3code://auth/callback?code=x", "/home/u/project"];
+  // electron-updater passes no arguments: the switches come back, the link and the path do not.
+  assert.deepEqual(relaunchArgs([], argv), ["--ozone-platform=wayland", "--user-data-dir=/home/u/.config/t3code-v2", "-v"]);
+  assert.deepEqual(relaunchArgs(undefined, argv.slice(3)), []);
+  assert.deepEqual(relaunchArgs([], ["--no-sandbox", "--no-sandbox", "--disable-gpu"]), ["--no-sandbox", "--disable-gpu"]);
+  // Arguments the updater did pass win.
+  assert.deepEqual(relaunchArgs(["--updated"], argv), ["--updated"]);
+});
+
+test("the AppImage state file reads back what the shell-quoted writer wrote", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3mods-env-"));
+  const file = path.join(dir, "current.env");
+  assert.deepEqual(readEnvFile(file), {});
+  fs.writeFileSync(file, "T3MODS_APPIMAGE='/home/u/Apps/T3-Code-1.0.0-x86_64.AppImage'\nT3MODS_MENU_ENTRY='0'\nT3MODS_APPDIR='/x/it'\\''s'\n# note\n");
+  assert.deepEqual(readEnvFile(file), { T3MODS_APPIMAGE: "/home/u/Apps/T3-Code-1.0.0-x86_64.AppImage", T3MODS_MENU_ENTRY: "0", T3MODS_APPDIR: "/x/it's" });
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("AppImage versions come from the release file name", () => {

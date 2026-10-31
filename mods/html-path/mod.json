@@ -1,7 +1,7 @@
 {
   "id": "html-path",
   "name": "HTML from a file",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "T3's html_preview and html_render tools take path: the absolute path of an .html file. The agent passes the file instead of pasting the page, which saves its tokens and time. Restart the app to apply.",
   "tags": [
     "agents",

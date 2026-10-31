@@ -303,6 +303,11 @@ export interface Patch {
   group?: boolean;
   /** A failure does not stop the mod. */
   optional?: boolean;
+  /**
+   * Id of an older patch in this mod that this one replaces (the same edit for a newer app
+   * shape). While this one applies, the older one finding nothing reports "replaced".
+   */
+  replaces?: string;
   /** Evaluated when patches load; state is the mod's saved state. */
   predicate?(ctx: { state: Record<string, unknown> }): boolean;
 }

@@ -198,6 +198,19 @@ test("patched tools take an optional html and a path; the handlers read the file
   assert.equal(calls.length, 0, "no call reached T3's service after a failure");
 });
 
+test("0.1.4 shape: a reworded width and an appearance field; the schema patch still applies", () => {
+  const v014 = FIXTURE.replace(
+    "width: optional$8(Int$6.annotate({ description: `Viewport width in CSS pixels, 240-1600.` }))",
+    "width: optional$8(Int$6.annotate({ description: `CSS pixels, 240 to 1600. Default 728.` })),\n\t\tappearance: optional$8(String$7)",
+  );
+  assert.notEqual(v014, FIXTURE);
+  const { context } = sandbox();
+  const t = vm.runInNewContext(patchAll(v014), context);
+  assert.ok(t.HtmlPreviewTool.parameters.fields.path.optional);
+  assert.equal(t.HtmlRenderTool.parameters.fields.html.optional, t.Html);
+  assert.ok(t.HtmlPreviewTool.parameters.fields.appearance.optional);
+});
+
 test("the patches follow other minified names, $ included", () => {
   const renamed = FIXTURE.replace(/Html/g, "Html$$2").replaceAll("String$7", "String$1").replaceAll("optional$8", "optional$3").replaceAll("OrchestratorMcpFailure", "Failure$4").replaceAll("(input)", "(input$1)").replaceAll("...input", "...input$1").replaceAll("preview(input)", "preview(input$1)");
   const { context, calls } = sandbox();

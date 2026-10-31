@@ -1,7 +1,7 @@
 {
   "id": "no-dead-taskkill",
   "name": "No taskkill for exited processes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "On Windows, T3's backend ran taskkill /T /F twice for every git or gh command that exited with a non-zero code, after the process was already gone. This mod skips it. Cancel and timeout kills of live processes still kill the tree. Restart the app to apply.",
   "tags": [
     "performance",

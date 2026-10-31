@@ -13,14 +13,27 @@ const rowData = [
   },
   {
     // Turn fold ("Worked for 5m"): remember which of the turn's entries it hides...
+    // 0.1.4 splits a turn at each steer message ("Continued for 2m"), and every fold builds its
+    // hidden set from its own slice of entries: hiddenEntryIds:hidden(slice),entryIds:new Set(slice.map(
+    // 0.1.3 has one fold per turn: ...turn.startBoundary??..,hiddenEntryIds:set,label:..}
     id: "turn-fold-hidden",
     find: "hiddenEntryIds:",
-    replace: [
-      {
-        match: /((\i)\.startBoundary\?\?.{0,400}?hiddenEntryIds:(\i),label:\i)\}/,
-        replace: "$1,modEntries:$2.entries.filter(__e=>$3.has(__e.id))}",
-      },
-    ],
+    transform(text) {
+      const id = "[A-Za-z_$][\\w$]*";
+      const re = (r) => new RegExp(r.source.replaceAll("\\i", id), r.flags);
+      const sliced = re(/hiddenEntryIds:(\i)\((\i)\),entryIds:new Set\(\2\.map\(/g);
+      if (sliced.test(text)) {
+        return text.replace(
+          sliced,
+          (_m, hidden, slice) =>
+            `...(__h=>({hiddenEntryIds:__h,modEntries:${slice}.filter(__e=>__h.has(__e.id))}))(${hidden}(${slice})),entryIds:new Set(${slice}.map(`,
+        );
+      }
+      return text.replace(
+        re(/((\i)\.startBoundary\?\?.{0,400}?hiddenEntryIds:(\i),label:\i)\}/),
+        (_m, head, turn, hidden) => `${head},modEntries:${turn}.entries.filter(__e=>${hidden}.has(__e.id))}`,
+      );
+    },
   },
   {
     // ...and carry them onto the fold row.

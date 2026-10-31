@@ -9,6 +9,7 @@ own Electron.
 | **AppImage** (`T3-Code-*.AppImage`) | Extracts the AppImage once per version into `~/.local/share/t3mods/appimage/` and adds the shim there. No root. | The loader catches the in-app update and starts the t3mods launcher, which extracts and patches the new version first. |
 | **.deb** (Ubuntu, Debian) | One `sudo` step: `dpkg-divert` moves `app.asar` to `_app.asar`, and a root-owned shim goes into `resources/app/`. | Automatic: dpkg writes every new `app.asar` to the diverted path, so the shim stays. Works for in-app updates and `apt upgrade`. |
 | **AUR** (`t3code-bin`, `t3code-nightly-bin`) and other `/opt` installs | One `sudo` step: the shim, plus pacman hooks in `/etc/pacman.d/hooks/`. | Automatic: the hooks restore the package files before each pacman transaction and put the shim back after it. |
+| **Extracted AppImage** in a folder you own (a setup script runs `--appimage-extract`, one folder per version) | `install.sh --app <folder>` adds the shim; no root. | Start the app through `~/.t3/t3mods/linux/launch.sh`, which adds the shim to a new folder before the app starts. |
 
 All three load the loader from your kit (`~/.t3/t3mods`), so loader updates never need root.
 
@@ -22,10 +23,52 @@ All three load the loader from your kit (`~/.t3/t3mods`), so loader updates neve
 Then start **T3 Code (mods)** from your app menu, or run `~/.local/bin/t3code-mods`.
 
 - The launcher sets `APPIMAGE` to your original file, so in-app updates keep working,
-  including differential downloads.
-- `t3code://` links (sign-in) open the modded app. The installer sets this with `xdg-mime`.
-- Two versions stay on disk (current and previous), about 400 MB each.
+  including differential downloads. Keep the release file name (`T3-Code-<version>-x86_64.AppImage`):
+  the updater replaces it with the new version's name and deletes the old file.
+- After an update the new version starts with the switches the old one had
+  (`--ozone-platform=wayland`, `--user-data-dir=...`); electron-updater itself passes none.
+- `t3code://` links (sign-in) open the modded app. The installer sets this with `xdg-mime`, and
+  the launcher sets `T3CODE_DESKTOP_LAUNCHER_PATH`, so the link entry T3 Code writes itself
+  starts the launcher too, not the bare AppImage. Set the variable yourself to send links to
+  your own launcher (for example one that picks a profile).
+- Two versions stay on disk (current and previous), about 400 MB each, plus any version an
+  app still runs.
 - Starting the original AppImage directly still works, without mods.
+- Your own menu entries (a wrapper per profile): `install --no-menu-entry` hides
+  **T3 Code (mods)** from the menu and keeps it for links; the choice survives updates.
+  `install --menu-entry` shows it again.
+
+### Two profiles from one AppImage
+
+Profiles with their own `T3CODE_HOME` (and `XDG_CONFIG_HOME` for the app data) can run at
+the same time through the same launcher:
+
+```sh
+T3CODE_HOME=~/.t3-work T3MODS_APP_NAME=Work XDG_CONFIG_HOME=~/.t3-work/appdata ~/.local/bin/t3code-mods
+```
+
+The relaunch after an update keeps each profile's environment. When one profile updates, the
+other keeps running its version (it stays on disk) and follows the new AppImage, so its own
+update check works on the new file; restart it to switch.
+
+## Extracted AppImage
+
+For an app folder you manage yourself, such as `~/.local/opt/t3code-nightly/<version>`:
+
+```sh
+./install.sh --app ~/.local/opt/t3code-nightly/0.1.4-nightly.20261027.3770
+```
+
+A new version lands in a new folder without the shim. Point your launcher or desktop entry
+at the kit's launcher instead of the executable, with the executable as its first argument:
+
+```sh
+~/.t3/t3mods/linux/launch.sh ~/.local/opt/t3code-nightly/<version>/t3code --ozone-platform=wayland
+```
+
+When the folder lacks the shim (or holds a fresh `app.asar`), it runs `t3mods install --app`
+on that folder first, under a lock so two profiles that start together install once. A start
+with the shim in place only checks two files.
 
 ## .deb and AUR
 

@@ -53,6 +53,19 @@ server_tier() { # the server-hello example sets a header on every backend respon
   curl -sSI "http://127.0.0.1:$port/" | grep -i '^x-t3mods: server-hello'
 }
 state_is() { t3mods status "${@:2}" | tee /dev/stderr | grep -q ": $1"; }
+handler_is_launcher() { # the app's own t3code:// entries (not t3mods' own) all start the launcher
+  local entries
+  entries=$(grep -l "x-scheme-handler/t3code;" "$HOME"/.local/share/applications/*.desktop | grep -v t3code-mods.desktop) || return 1
+  grep -h "^Exec=" $entries | tee /dev/stderr | grep -v -q "t3code-mods" && return 1
+  return 0
+}
+follows_appimage() { # follows_appimage <file>: the app's APPIMAGE becomes <file> within 20 s
+  for _ in $(seq 20); do
+    cdp "fetch('/__mods/rpc/main/e2e-update/appimage',{method:'POST',body:'[]'}).then(r=>r.json()).then(r=>r.value)" | grep -qF "$1" && return 0
+    sleep 1
+  done
+  return 1
+}
 
 full_checks() {
   check "app starts and the mod runtime boots" wait_ready
@@ -80,6 +93,10 @@ case $scenario in
     check "unit tests pass on Linux" node_ --test "$repo"/tests/*.test.cjs
     check "launcher and menu entry exist" test -x "$HOME/.local/bin/t3code-mods" -a -f "$HOME/.local/share/applications/t3code-mods.desktop"
     check "status: installed" state_is installed
+    state="$HOME/.local/share/t3mods/appimage/current.env"
+    oldver=$(sed -n "s/^T3MODS_VERSION='\(.*\)'$/\1/p" "$state")
+    check "install --no-menu-entry" t3mods install --no-menu-entry
+    check "the menu entry is hidden" grep -qx 'NoDisplay=true' "$HOME/.local/share/applications/t3code-mods.desktop"
 
     step "start through the launcher"
     # Skip the first-run dialog, so the screenshot shows the Mods page.
@@ -87,17 +104,28 @@ case $scenario in
     echo '{"onboardingCompletedAt":"2026-10-01T00:00:00.000Z"}' >"$HOME/.t3/userdata/client-settings.json"
     start_app "$HOME/.local/bin/t3code-mods"
     full_checks
+    # The app writes its own t3code:// entry; the launcher points it at itself, not the AppImage.
+    check "the app's own link handler starts the launcher" handler_is_launcher
     cdp "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Dismiss')?.click()" >/dev/null || true
     cdp "window.__TSR_ROUTER__.navigate({to:'/settings/mods'})" >/dev/null && sleep 3 &&
       node_ "$repo/tools/cdp.mjs" shot /out/mods-page.png >/dev/null && ok "screenshot /out/mods-page.png"
 
-    step "app update: the updater replaces the AppImage and starts the new one"
+    step "another app (second profile) updates: this one follows the new AppImage"
+    other="$HOME/Applications/T3-Code-0.0.98-nightly.other-x86_64.AppImage"
+    mv "$old" "$other"
+    sed -i "s|^T3MODS_APPIMAGE=.*|T3MODS_APPIMAGE='$other'|" "$state"
+    check "the loader follows the launcher's state" follows_appimage "$other"
+    old=$other
+
+    step "app update: the updater replaces the AppImage and starts the new one, with no arguments"
     new="$HOME/Applications/T3-Code-0.0.99-nightly.test-x86_64.AppImage"
     mv "$old" "$new"
-    cdp "fetch('/__mods/rpc/main/e2e-update/update',{method:'POST',body:JSON.stringify(['$new',['--remote-debugging-port=9333','--disable-gpu']])}).then(r=>r.json())" || true
+    # electron-updater passes no arguments; the relaunch keeps this run's switches, so the new
+    # version is only reachable on the CDP port (wait_ready) if the loader carried them over.
+    cdp "fetch('/__mods/rpc/main/e2e-update/update',{method:'POST',body:JSON.stringify(['$new',[]])}).then(r=>r.json())" || true
     check "the loader hands the new AppImage to the launcher" grep -q "t3code-mods" /tmp/e2e-update.json
-    for _ in $(seq 30); do pgrep -f "appimage/0.0.46" >/dev/null || break; sleep 1; done
-    check "the new version starts with mods" wait_ready
+    for _ in $(seq 30); do pgrep -f "appimage/$oldver/" >/dev/null || break; sleep 1; done
+    check "the new version starts with mods and the old switches" wait_ready
     check "it runs from the new extracted copy" pgrep -f "appimage/0.0.99-nightly.test/squashfs-root/t3code"
     # /proc/<pid>/environ is the environment the process started with: the new version must
     # start without the old one's --require (its own loader adds it again).
@@ -105,7 +133,8 @@ case $scenario in
       pid=$(pgrep -f -- "0.0.99-nightly.test/squashfs-root/t3code --no-sandbox --remote" | head -n 1)
       [ -n "$pid" ] && ! tr "\0" "\n" <"/proc/$pid/environ" | grep -q "t3mods-loader"'
     check "all mods start after the update" all_mods_ok
-    check "status: installed on the new version" grep -q "0.0.99-nightly.test" "$HOME/.local/share/t3mods/appimage/current.env"
+    check "status: installed on the new version" grep -q "0.0.99-nightly.test" "$state"
+    check "the hidden menu entry stays hidden after the update" grep -qx 'NoDisplay=true' "$HOME/.local/share/applications/t3code-mods.desktop"
     stop_app
 
     step "uninstall"
