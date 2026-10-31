@@ -9,7 +9,7 @@
 [data-chat-composer-body="true"] {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 7px calc(4px + var(--cc-trail, 0px)) 7px 16px !important;
+  padding: 7px calc(4px + var(--cc-trail, 0px)) 7px calc(16px + var(--cc-lead, 0px)) !important;
 }
 [data-chat-composer-body="true"] .composer-tiptap {
   min-height: calc(1lh + 8px) !important;
@@ -64,4 +64,44 @@
 }
 [data-slot="composer-shell"][data-context-row="true"] [data-slot="composer-host"]::before {
   display: none !important;
+}
+
+/* Background work ("Waiting on 3 subagents"): the timeline's now line moves into the row as
+   "3 agents" with a spinner (renderer.js); Esc stops it. */
+[data-thread-now-line="true"][data-cc-inline] {
+  display: none !important;
+}
+.cc-status {
+  position: absolute;
+  z-index: 20;
+  left: 14px;
+  bottom: 1px;
+  height: 38px;
+  max-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  cursor: default;
+}
+.cc-status[hidden] {
+  display: none;
+}
+.cc-status > span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-spin {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.6px solid color-mix(in oklab, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  animation: cc-spin 0.9s linear infinite;
+}
+@keyframes cc-spin {
+  to { transform: rotate(360deg); }
 }

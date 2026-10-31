@@ -1,9 +1,13 @@
 {
   "id": "compact-composer",
   "name": "Compact composer",
-  "version": "0.1.0",
-  "description": "The composer is one row: the prompt and the model picker side by side. No send, stop or attach buttons (Enter sends, Esc stops, drop or paste attaches). Permissions show only when they are not Full access.",
-  "tags": ["composer", "ui", "minimal"],
+  "version": "0.2.0",
+  "description": "The composer is one row: the prompt and the model picker side by side. No send, stop or attach buttons (Enter sends, Esc stops, drop or paste attaches). Background work shows in the row as '3 agents'. Permissions show only when they are not Full access.",
+  "tags": [
+    "composer",
+    "ui",
+    "minimal"
+  ],
   "requires": [],
   "repository": "https://github.com/JohnC0de/t3code-mods",
   "license": "MIT"

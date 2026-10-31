@@ -9,13 +9,15 @@ scrolls), and drops back to one row after you send.
 | Send button | Enter (Ctrl+Enter, Ctrl+Alt+Enter and the other send keys work as before) |
 | Stop button | Esc in the composer. The first Esc closes an open `@`, `$` or `/` menu; the next one stops the turn. With a draft in the composer, Esc stops the turn and keeps the draft. |
 | Attach button | Drop files on the composer, or paste them |
+| "Waiting on 3 subagents · Stop" line at the end of the timeline | A spinner and "3 agents" at the start of the row (hover for the full line). Any other background work ("Running npm test") shows its own title there. Esc stops it when no turn runs. A now line without Stop (a child thread that waits for your answer) keeps its place and its Open button. |
 | "Full access" line under the composer | Nothing: Full access is the usual mode. Any other mode (Supervised, Auto-accept edits, Auto) shows inside the row, left of the model picker. |
 
 The model picker stays as the app draws it: provider icon, model, effort as text, and the bolt
 when fast mode is on. Ctrl+Shift+M opens it and Ctrl+Shift+E changes the effort.
 
-No patches: the mod is CSS on the app's data attributes, plus a small renderer for Esc and for
-the room that the permissions label needs. Esc with a draft uses `api.threads`
+No patches: the mod is CSS on the app's data attributes, plus a small renderer for Esc, the
+background-work label and the room that the labels need. The label mirrors the timeline's now
+line, so it shows while that line is rendered (the timeline renders only rows near the view). Esc with a draft uses `api.threads`
 (`core/threads`); without it, Esc still stops a turn while the prompt is empty.
 
 Checked on T3 Code 0.1.7-nightly.20261031 (Linux).
