@@ -18,6 +18,31 @@ const fullInput = (body, store) =>
     .replace(/(^|,)expandedWorkGroupIds:([\w$]+)/, `$1expandedWorkGroupIds:${store}.full?${store}.all:$2`);
 const isWorkingOf = (body) => /(?:^|,)isWorking:([\w$]+)/.exec(body)?.[1] ?? "!1";
 
+// 0.1.7: the same derive and stabilizer hooks, but the compiler caches the input object in a
+// variable first: input={timelineEntries:..};rows=stable(derive(`${threadKey}\0${root}`,input),threadKey).
+// Full density swaps in a copy of the input with every fold open, memoized so the derive hook
+// sees the same object until the input or the density changes.
+const VAR_ROWS = re(/(\i)=(\i)\((\i)\(([^,()]+?),(\i)\),(\i)\)/g);
+
+function patchVarRows(text, self) {
+  const m = [...text.matchAll(VAR_ROWS)].find((x) => text.includes(`${x[5]}={timelineEntries:`) && x[4].includes(`\${${x[6]}}`));
+  if (!m) return null;
+  const [all, rows, stable, derive, key, input, threadKey] = m;
+  const R = reactBefore(text, m.index);
+  if (!R) return null;
+  const memo =
+    `(__calmS=>{let __calmV=(0,${R}.useSyncExternalStore)(__calmS.sub,__calmS.get),__calmF=__calmS.full,` +
+    `__calmI=(0,${R}.useMemo)(()=>__calmF?{...${input},expandedRunIds:__calmS.all,expandedWorkGroupIds:__calmS.all}:${input},[${input},__calmF]),` +
+    `__calmR=${derive}(${key},__calmI);` +
+    `return(0,${R}.useMemo)(()=>${self}.calmRows?.(__calmR,{threadKey:${threadKey},entries:${input}.timelineEntries,latestRun:${input}.latestRun,isWorking:${input}.isWorking})??__calmR,` +
+    `[__calmR,${threadKey},${input},__calmV])})(${STORE})`;
+  return text.slice(0, m.index) + `${rows}=${stable}(${memo},${threadKey})` + text.slice(m.index + all.length);
+}
+
+// The React namespace that the component uses, from its last hook call before `index`.
+const reactBefore = (text, index) =>
+  [...text.slice(0, index).matchAll(re(/\(0,(\i)\.use(?:State|Ref|Memo|Effect|Callback)\)/g))].at(-1)?.[1];
+
 // 0.1.4: React Compiler output. A hook derives the rows (state, not a memo) and a second one
 // keeps them stable: rows=stable(derive(`${threadKey}\0${root}`,{timelineEntries:..},threadKey)).
 // The arrow runs during render, so its hooks run every render in the same order:
@@ -28,7 +53,7 @@ function patchHookRows(text, self) {
   const m = HOOK_ROWS.exec(text);
   if (!m) return null;
   const [all, rows, stable, derive, key, body, entries, latestRun, threadKey] = m;
-  const R = [...text.slice(0, m.index).matchAll(re(/\(0,(\i)\.use(?:State|Ref|Memo|Effect|Callback)\)/g))].at(-1)?.[1];
+  const R = reactBefore(text, m.index);
   if (!R) return null;
   const memo =
     `(__calmS=>{let __calmV=(0,${R}.useSyncExternalStore)(__calmS.sub,__calmS.get),` +
@@ -60,6 +85,6 @@ module.exports = [
   {
     id: "timeline-rows",
     find: "continuesWorkLog:!0",
-    transform: (text, { self }) => patchHookRows(text, self) ?? patchMemoRows(text, self) ?? text,
+    transform: (text, { self }) => patchVarRows(text, self) ?? patchHookRows(text, self) ?? patchMemoRows(text, self) ?? text,
   },
 ];
